@@ -23,3 +23,11 @@ Thumbs.db
 # 临时/测试残留
 .tmp/
 *.tmp
+
+# 一次性 debug / probe 脚本（debug 阶段在 scripts/ 下随手写的工具；用完即删，
+# 不要进版本控制。repo 已有的稳定脚本是 smoke.mjs / e2e-live.mjs）
+/scripts/debug-*.mjs
+/scripts/probe-*.mjs
+/scripts/test-*.mjs
+/scripts/inline-probe.mjs
+/scripts/load-client-*.mjs
