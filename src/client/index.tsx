@@ -124,7 +124,7 @@ const globalScope = globalThis as unknown as { window?: Window & { __ModuleLoade
 
 if (globalScope.window && globalScope.window.__ModuleLoader__) {
   globalScope.window.__ModuleLoader__.load({
-    id: 'dsh-database-console',
+    id: '@snowlocked/dsh-database-console',
     factory: () => ({ inject, apply }),
   })
 } else {
