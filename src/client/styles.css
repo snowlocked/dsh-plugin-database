@@ -1,0 +1,601 @@
+/* dsh-database-console 客户端样式（暗色主题，无外部依赖） */
+:root {
+  --db-bg: #0e1116;
+  --db-panel: #151a23;
+  --db-panel-2: #1b2230;
+  --db-border: #2a3345;
+  --db-border-strong: #3a4660;
+  --db-text: #e6e9ef;
+  --db-muted: #8b93a3;
+  --db-accent: #4c8dff;
+  --db-accent-weak: rgba(76, 141, 255, 0.14);
+  --db-ok: #37c978;
+  --db-warn: #e0b341;
+  --db-err: #ff5f56;
+  --db-radius: 8px;
+  --db-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+
+#dsh-database-console {
+  --bg: var(--db-bg);
+  color: var(--db-text);
+  font-size: 13px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+#dsh-database-console *,
+#dsh-database-console *::before,
+#dsh-database-console *::after {
+  box-sizing: border-box;
+}
+#dsh-database-console .db-topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #1a2130, #141a26);
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  margin-bottom: 10px;
+}
+#dsh-database-console .db-title {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#dsh-database-console .db-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #4c8dff, #7b61ff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #fff;
+}
+#dsh-database-console .db-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+#dsh-database-console button {
+  font: inherit;
+  color: var(--db-text);
+  background: var(--db-panel-2);
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+#dsh-database-console button:hover:not(:disabled) {
+  border-color: var(--db-accent);
+  background: var(--db-accent-weak);
+}
+#dsh-database-console button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+#dsh-database-console button.db-btn-primary {
+  background: var(--db-accent);
+  border-color: var(--db-accent);
+  color: #fff;
+}
+#dsh-database-console button.db-btn-primary:hover:not(:disabled) {
+  background: #6ba0ff;
+  border-color: #6ba0ff;
+}
+#dsh-database-console button.db-btn-danger {
+  color: var(--db-err);
+}
+#dsh-database-console button.db-btn-ghost {
+  background: transparent;
+}
+#dsh-database-console .db-seg {
+  display: inline-flex;
+  background: var(--db-panel);
+  border: 1px solid var(--db-border);
+  border-radius: 8px;
+  padding: 2px;
+}
+#dsh-database-console .db-seg button {
+  border: none;
+  background: transparent;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+#dsh-database-console .db-seg button.db-active {
+  background: var(--db-accent-weak);
+  color: #9cc0ff;
+}
+#dsh-database-console input,
+#dsh-database-console select,
+#dsh-database-console textarea {
+  font: inherit;
+  color: var(--db-text);
+  background: var(--db-panel);
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  outline: none;
+}
+#dsh-database-console input:focus,
+#dsh-database-console select:focus,
+#dsh-database-console textarea:focus {
+  border-color: var(--db-accent);
+}
+#dsh-database-console .db-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#dsh-database-console .db-field label {
+  color: var(--db-muted);
+  font-size: 12px;
+}
+#dsh-database-console .db-grid {
+  display: grid;
+  gap: 12px;
+}
+#dsh-database-console .db-card {
+  background: var(--db-panel);
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  padding: 12px;
+}
+#dsh-database-console .db-card-title {
+  font-size: 12px;
+  color: var(--db-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+#dsh-database-console .db-banner {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  margin: 6px 0;
+}
+#dsh-database-console .db-banner-error {
+  background: rgba(255, 95, 86, 0.1);
+  border-color: rgba(255, 95, 86, 0.35);
+  color: #ff9b94;
+}
+#dsh-database-console .db-banner-info {
+  background: rgba(76, 141, 255, 0.1);
+  border-color: rgba(76, 141, 255, 0.3);
+  color: #9cc0ff;
+}
+#dsh-database-console .db-banner-ok {
+  background: rgba(55, 201, 120, 0.1);
+  border-color: rgba(55, 201, 120, 0.3);
+  color: #7fe3a9;
+}
+#dsh-database-console table.db-data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#dsh-database-console table.db-data th,
+#dsh-database-console table.db-data td {
+  border: 1px solid var(--db-border);
+  padding: 5px 9px;
+  text-align: left;
+  vertical-align: top;
+  max-width: 340px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+#dsh-database-console table.db-data th {
+  background: var(--db-panel-2);
+  color: var(--db-muted);
+  position: sticky;
+  top: 0;
+  font-weight: 600;
+  cursor: default;
+}
+#dsh-database-console table.db-data tbody tr:hover td {
+  background: rgba(76, 141, 255, 0.05);
+}
+#dsh-database-console .db-scroll {
+  overflow: auto;
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  max-height: 420px;
+}
+#dsh-database-console .db-null {
+  color: #5b6374;
+  font-style: italic;
+}
+#dsh-database-console .db-mono {
+  font-family: var(--db-mono);
+  font-size: 12px;
+}
+#dsh-database-console .db-ok {
+  color: var(--db-ok);
+}
+#dsh-database-console .db-err {
+  color: var(--db-err);
+}
+#dsh-database-console .db-muted {
+  color: var(--db-muted);
+}
+#dsh-database-console .db-empty {
+  color: var(--db-muted);
+  text-align: center;
+  padding: 28px 10px;
+}
+#dsh-database-console .db-badge {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 8px;
+  border: 1px solid var(--db-border-strong);
+  color: var(--db-muted);
+}
+#dsh-database-console .db-badge-ok {
+  color: var(--db-ok);
+  border-color: rgba(55, 201, 120, 0.4);
+}
+#dsh-database-console .db-badge-type {
+  color: #8fb8ff;
+  border-color: rgba(76, 141, 255, 0.35);
+}
+#dsh-database-console .db-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#dsh-database-console .db-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#dsh-database-console .db-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#dsh-database-console .db-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  background: var(--db-panel-2);
+  cursor: pointer;
+}
+#dsh-database-console .db-list-item:hover {
+  border-color: var(--db-accent);
+}
+#dsh-database-console .db-list-item.db-active {
+  border-color: var(--db-accent);
+  background: var(--db-accent-weak);
+}
+#dsh-database-console .db-chip {
+  font-family: var(--db-mono);
+  font-size: 11px;
+  color: var(--db-accent);
+}
+#dsh-database-console .db-divider {
+  height: 1px;
+  background: var(--db-border);
+  margin: 10px 0;
+}
+#dsh-database-console textarea.db-code {
+  font-family: var(--db-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  tab-size: 2;
+}
+#dsh-database-console .db-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#dsh-database-console .db-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--db-muted);
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+/* ===== DSH shell 集成：中栏接管 + 侧边栏入口 ===== */
+
+[data-pane='conversation'],
+[class*='centerCol'] {
+  position: relative;
+}
+
+[data-dsh-database-view] {
+  position: absolute;
+  inset: 0;
+  display: none;
+  z-index: 60;
+  background: var(--db-bg, #0e1116);
+  overflow: auto;
+}
+html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [data-dsh-database-view] {
+  display: block;
+}
+html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [data-pane='conversation'] > :not([data-dsh-database-view]),
+html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [class*='centerCol'] > :not([data-dsh-database-view]) {
+  display: none !important;
+}
+
+/* 侧边栏入口行（纯 DOM，跟随 shell 视觉）
+   配色遵循 DSH 语义别名：默认 label-secondary；激活 interactive-bg-active + label-primary + 600 */
+button.db-sidebar-entry {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+button.db-sidebar-entry:hover {
+  background: var(--dsw-alias-interactive-bg-hover, transparent);
+  color: var(--dsw-alias-label-secondary);
+}
+button.db-sidebar-entry[data-active='true'],
+button.db-sidebar-entry[data-active='true']:hover {
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+.db-sidebar-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+button.db-sidebar-entry svg {
+  display: block;
+}
+
+/* ===== 独立预览模式 ===== */
+#dsh-database-standalone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  background: var(--db-bg, #0e1116);
+  overflow: auto;
+}
+
+/* ---------- 数据浏览：可拖列宽网格 / 单元格编辑 ---------- */
+#dsh-database-console .db-structure-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font: inherit;
+  color: inherit;
+  border-radius: 6px;
+}
+#dsh-database-console .db-structure-toggle:hover {
+  background: var(--db-panel-2);
+}
+/* 双表网格：表头固定在外层不参与竖向滚动；表体独立滚动；共用同一组列宽 */
+#dsh-database-console .db-gridx {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+}
+#dsh-database-console .db-gridx-head {
+  overflow: hidden;
+  background: var(--db-panel-2);
+  border-bottom: 1px solid var(--db-border-strong);
+  border-radius: 6px 6px 0 0;
+}
+#dsh-database-console .db-gridx-body {
+  overflow: auto;
+  max-height: 460px;
+}
+#dsh-database-console table.db-gridx-t {
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#dsh-database-console table.db-gridx-t thead th {
+  position: relative;
+  color: var(--db-muted);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  user-select: none;
+  padding: 0;
+  min-height: 28px;
+  border-right: 1px solid var(--db-border);
+  vertical-align: top;
+}
+#dsh-database-console table.db-gridx-t thead th .db-gridx-th {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 6px 8px 6px 9px;
+}
+#dsh-database-console table.db-gridx-t thead th .db-gridx-th-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 9px;
+}
+#dsh-database-console .db-sort-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  border: 0;
+  background: none;
+  color: var(--db-muted);
+  font-weight: 600;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  padding: 2px 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+#dsh-database-console .db-sort-label:hover {
+  color: var(--db-accent);
+}
+#dsh-database-console .db-sort-label .db-sort-idle {
+  color: transparent;
+  opacity: 0.55;
+}
+#dsh-database-console .db-sort-label:hover .db-sort-idle {
+  color: var(--db-muted);
+}
+#dsh-database-console .db-sort-label .db-sort-on {
+  color: var(--db-accent);
+}
+#dsh-database-console .db-filter-toggle {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.55;
+  user-select: none;
+}
+#dsh-database-console .db-filter-toggle:hover {
+  opacity: 1;
+  background: var(--db-accent-weak);
+  color: var(--db-accent);
+}
+#dsh-database-console .db-filter-toggle.db-filter-on {
+  opacity: 1;
+  color: var(--db-accent);
+  background: var(--db-accent-weak);
+}
+#dsh-database-console .db-gridx-filter {
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 9px);
+  margin: 0 4px 4px 5px;
+  padding: 2px 6px;
+  font-size: 11px;
+  border: 1px solid var(--db-accent);
+  border-radius: 4px;
+  background: var(--db-panel);
+  color: inherit;
+  outline: none;
+}
+#dsh-database-console table.db-gridx-t thead th .db-colresize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 5;
+}
+#dsh-database-console table.db-gridx-t td.db-cell {
+  border-bottom: 1px solid var(--db-border);
+  border-right: 1px solid var(--db-border);
+  padding: 4px 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  color: inherit;
+}
+#dsh-database-console table.db-gridx-t td.db-cell:hover {
+  background: var(--db-accent-weak);
+}
+#dsh-database-console table.db-gridx-t td.db-cell-active,
+#dsh-database-console table.db-gridx-t td.db-cell-active:hover {
+  background: rgba(76, 141, 255, 0.22);
+  box-shadow: inset 0 0 0 1px var(--db-accent);
+}
+#dsh-database-console .db-celldetail {
+  flex: 0 0 300px;
+  width: 300px;
+  max-width: 38%;
+  min-width: 260px;
+  padding: 10px 12px;
+  border-left: 1px solid var(--db-border);
+  background: var(--db-panel-2);
+  overflow: auto;
+  max-height: 560px;
+}
+#dsh-database-console .db-celldetail-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+#dsh-database-console .db-celldetail-meta {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+#dsh-database-console .db-row-toggle {
+  width: 100%;
+  font-size: 12px;
+  color: var(--db-accent);
+  background: none;
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-top: 8px;
+  cursor: pointer;
+  text-align: left;
+  gap: 4px;
+}
+#dsh-database-console .db-row-toggle:hover {
+  border-color: var(--db-accent);
+  background: var(--db-accent-weak);
+}
+#dsh-database-console .db-celldetail-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px solid var(--db-border);
+  border-radius: 6px;
+  background: var(--db-panel);
+}

@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-database-console
+      name: dsh-database-console
+      config: {}

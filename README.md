@@ -1,0 +1,122 @@
+# dsh-database-console
+
+DSH（DeepSeek Harness）**数据库工作台**插件：把数据库搬进对话与 Web 界面。
+
+- 支持 5 种数据库：**PostgreSQL、MySQL、MongoDB、SQLite（Node 内置驱动，零原生依赖）、达梦 DM（官方 dmdb 驱动）**
+- 连接管理（保存/测试/删除，密码支持 `env:VAR` 或 `cred:NAME` 引用，存储文件 `chmod 600`）
+- 数据浏览：schema/模式、表/视图/集合、字段结构、分页预览
+- SQL 控制台：多语句、参数绑定、只读模式（默认开启，写操作需显式取消）
+- AI 自然语言查数：自动采集表结构 → 生成只读 SQL →（可选）直接执行返回结果；AI 模型**复用 DSH 自身配置**，界面“按需选模型”，不在插件里重复填 Key
+- 对话中给 AI 注册的 DB 工具：`db_connections` / `db_tables` / `db_table_schema` / `db_query`（全部只读）
+
+## 目录结构
+
+```
+src/
+  index.ts            插件入口（cordis apply + webServer / tools / systemPrompt 注入）
+  http.ts             HTTP API（前缀 /api/dsh-database-console/*）
+  manager.ts          方言注册、打开会话、连通测试、AI 结构采集
+  store.ts            连接持久化（connections.json，脱敏输出）
+  ai.ts               NL→SQL（复用 DSH 模型，按需选模型）
+  tools.ts            对话 AI 的只读 DB 工具
+  dialects/           postgres / mysql / sqlite / mongodb / dameng
+  client/             React 单页界面（自行注入样式，无第三方 UI 依赖）
+scripts/smoke.mjs     端到端冒烟（真实 SQLite 文件 + fake ctx 驱动全部路由）
+plugins/dsh-database-console/  可拷贝安装的插件包（含 lib 产物与 cordis.patch.yml）
+```
+
+## 构建与测试
+
+```bash
+npm install          # 含 dmdb / mongodb / mysql2 / pg（客户端 react 在 devDependencies）
+npm run build        # 产出 dist/ 与 plugins/dsh-database-console/lib（两处均可作为安装源）
+node scripts/smoke.mjs   # 端到端冒烟（保存/测试/表浏览/参数查询/只读拦截/写语句/删除/AI 失败兜底）
+npm run watch        # 开发热重建
+```
+
+## 安装到 DSH
+
+DSH 是基于 Cordis 的插件系统：**profile** 是运行单元（如 `web`），插件通过 `dsh plugin`（转发给 profile 内的 pnpm）安装。以下均为已实测可用的安装路径。
+
+### 0. 准备 DSH CLI（如未安装）
+
+```bash
+npm install -g @deepseek-ai/dsh     # 或：pnpm add -g @deepseek-ai/dsh
+dsh --version
+```
+
+### 1. 方式 A：本地源码 + link（开发 / 自用，改动后 build 即生效）
+
+```bash
+git clone https://github.com/snowlocked/dsh-plugin-database.git
+cd dsh-plugin-database
+npm install
+npm run build                       # 产出 dist/ 与 plugins/dsh-database-console/lib
+
+# 把插件装进 web profile（link: 协议 = node_modules 软链到源码目录）
+dsh plugin --profile web add "link:$(pwd)/plugins/dsh-database-console"
+```
+
+Windows PowerShell 下把 `$(pwd)` 换成仓库绝对路径：
+
+```powershell
+dsh plugin --profile web add "link:D:\path\to\dsh-plugin-database\plugins\dsh-database-console"
+```
+
+安装后重启 `dsh web`（Ctrl+F5 刷界面）。之后源码改动执行 `npm run build` 并重启 DSH 即更新。
+
+### 2. 方式 B：npm registry（待发布后可用）
+
+```bash
+dsh plugin --profile web add dsh-database-console
+```
+
+### 3. 方式 C：没有 dsh CLI 时手工等价操作
+
+```bash
+# 编辑 ~/.dsh/profiles/web/package.json：
+#   dependencies 增加  "dsh-database-console": "link:D:/绝对路径/plugins/dsh-database-console"
+#   dsh.profile.bundles 数组末尾追加 "dsh-database-console"
+cd ~/.dsh/profiles/web && pnpm install
+```
+
+重启后：左侧边栏出现「数据库」入口，Settings → Plugins 中可见并可启用/停用。入口 `lib/index.js`、客户端 `lib/client.js`、加载补丁 `cordis.patch.yml`（详见 `docs/INSTALL-WEB-PROFILE.md`）。
+
+启用后：
+
+- HTTP API：DSH 真实 webServer **仅支持 POST**（GET→404 / DELETE→405，已实测），因此全部接口为 `POST + JSON body`：
+  `/state`、`/connections/list`、`/connections/save|test`、`/connection`（详情）、`/connection/remove`、
+  `/connection/databases|schemas|tables|columns|rows`、`/connection/cell/update`、`/query`、`/ai/models`、`/ai/generate`、`/ai/run`
+- Web GUI：左侧「数据库」入口 → 中栏工作台（连接管理 / 数据浏览 / SQL 控制台 / 自然语言查询 四页签）；
+  PG/MySQL 支持顶部 **数据库下拉切换**（浏览/控制台/AI 均针对所选库，PG 库内再选 schema）；
+  数据浏览：字段结构默认折叠可展开；数据表**列宽可拖动**、横向/纵向滚动、单元格**单行展示 + 原生 title**，
+  **点击单元格在右侧查看/编辑**（按主键 UPDATE，无主键表禁用，MongoDB 只读提示）
+  无 DSH 环境打开 client bundle 则退化为右下角悬浮独立预览
+- 对话：AI 可直接调用 4 个只读 DB 工具；插件同时写入系统提示指导用法
+
+## AI 路由（NL→SQL）
+
+- **模型配置不重复**：NL→SQL 直接复用 DSH 自身配置的模型（`ctx.llm` 的 provider / 模型 / 密钥），
+  连接保存表单不含 AI 设置项；插件页提供 **“按需选模型”下拉**（数据来自 `GET /ai/models`），不选则 DSH 自动决定。
+- 优先级：界面选择（provider/model）> 插件全局配置 `ai`（仅 cordis config 可设）> DSH 自动发现。
+- 生成的 SQL 一律只读校验（仅允许 SELECT/WITH/SHOW/EXPLAIN 等），误生成 DML 会被拦截
+- 表结构摘要默认最多采集 120 张表 × 40 列，避免上下文溢出
+
+## 说明与限制
+
+- 密码以明文写入连接文件（权限 0600）；生产环境建议使用 `cred:NAME`（走 DSH credentials 服务）或 `env:VAR`
+- SQLite 走 Node 内置 `node:sqlite`（Node ≥ 22.5），无需编译原生模块
+- MongoDB 连接需要指定 database；其“SQL 语句”接受 JSON：`{"collection":"...","filter":{...},"sort":{},"projection":{},"skip":0,"limit":50,"findOne":false}`
+- 达梦默认按 Oracle 模式执行（分页用 ROWNUM、双引号标识符）；如实例是 MySQL 兼容模式，请在连接里选择“MySQL 兼容模式”
+- 只读模式下禁止多语句与写操作；非只读可执行多语句与 DML/DDL（自担风险）
+
+## 左侧菜单 & 界面入口（DSH Web）
+
+Web 端集成与内置插件同构：浏览器 bundle 以 `window.__ModuleLoader__.load` 注册（内联 React，
+不依赖 loader 模块表），`apply` 挂载**左侧边栏「数据库」入口行**并在中栏渲染工作台面板
+（`html[data-dsh-database-active]` 显隐、与 task-board/ssh 面板互斥、点击会话自动交还对话）；
+无 loader 的普通页面打开同一 bundle 会退化为独立预览浮层。
+
+安装到 Web profile（`~/.dsh/profiles/web`）的完整步骤见 **`docs/INSTALL-WEB-PROFILE.md`**：
+`pnpm add` link 依赖 → `dsh.profile.bundles` 追加 `dsh-database-console` → 重启 `dsh web` →
+Settings → Plugins 可见可管理。
