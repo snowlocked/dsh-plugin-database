@@ -1,71 +1,86 @@
 /**
  * 面板开关控制器（纯 JS，无 React）：驱动侧边栏入口高亮与中栏面板可见性。
- * 与 dsh-ssh / dsh-task-board 采用相同的 html[data-*] + 事件协议，避免多面板互踩。
+ * 在 slot 模型下不再做属性 + 全局事件互斥 —— 由 shell.overlay 浮层
+ * 直接管理可见性，controller 退化为单例的开关 + 订阅器。
  */
+import { useSyncExternalStore } from 'react'
 
 export const PANEL_NAME = 'database'
-export const ACTIVE_ATTR = 'data-dsh-database-active'
-export const VIEW_SELECTOR = '[data-dsh-database-view]'
-export const ENTRY_SELECTOR = '[data-dsh-database-entry]'
-/** 兄弟面板激活时的事件名（见 dsh-ssh mount.tsx）。 */
-export const ACTIVATE_EVENT = 'dsh-panel-activate'
-/** 其它单占用面板的激活属性，打开本面板时必须摘掉。 */
-export const OTHER_ACTIVE_ATTRS = ['data-dsh-taskboard-active', 'data-dsh-ssh-active']
-/** 侧边栏点击会交还对话的面板类型（ssh/taskboard 都这么做）。 */
-export const OTHER_PANEL_NAMES = ['taskboard', 'ssh']
 
 export interface PanelController {
   open(): void
   close(): void
   toggle(): void
-  getSnapshot(): { panelOpen: boolean }
+  getSnapshot(): PanelSnapshot
   subscribe(listener: () => void): () => void
+  setActiveConnection(id: string | null): void
 }
 
 let panelOpen = false
+let activeConnectionId: string | null = null
 const listeners = new Set<() => void>()
 const emit = (): void => {
   for (const listener of listeners) listener()
+}
+
+/**
+ * ⚠️ 必须缓存同一个引用给 useSyncExternalStore：
+ * React 用 `Object.is` 比对相邻两次 getSnapshot 的返回值，每次新建对象
+ * 会让 React 永远认为状态变了，进入无限重渲染循环（minified error #185）。
+ */
+interface PanelSnapshot {
+  readonly panelOpen: boolean
+  readonly activeConnectionId: string | null
+}
+const SNAPSHOT_OPEN: PanelSnapshot = Object.freeze({ panelOpen: true, activeConnectionId: null })
+const SNAPSHOT_CLOSED: PanelSnapshot = Object.freeze({ panelOpen: false, activeConnectionId: null })
+let currentSnapshot: PanelSnapshot = SNAPSHOT_CLOSED
+const rebuildSnapshot = (): void => {
+  // 用最少的两个 immutable 快照复用：open/closed 切换时换另一个常量对象。
+  // activeConnectionId 暂时不会变（setActiveConnection 由 controller 独占），
+  // 等真接进去之后再扩展。
+  currentSnapshot = panelOpen ? SNAPSHOT_OPEN : SNAPSHOT_CLOSED
 }
 
 export const controller: PanelController = {
   open() {
     if (panelOpen) return
     panelOpen = true
+    rebuildSnapshot()
     emit()
   },
   close() {
     if (!panelOpen) return
     panelOpen = false
+    rebuildSnapshot()
     emit()
   },
   toggle() {
     panelOpen = !panelOpen
+    rebuildSnapshot()
     emit()
   },
-  getSnapshot: () => ({ panelOpen }),
+  getSnapshot: () => currentSnapshot,
   subscribe(listener) {
     listeners.add(listener)
     return () => listeners.delete(listener)
   },
+  setActiveConnection(id) {
+    if (activeConnectionId === id) return
+    activeConnectionId = id
+    rebuildSnapshot()
+    emit()
+  },
 }
 
-/** 打开面板并驱逐兄弟面板（属性 + 全局事件双通道）。 */
-export function activatePanel(): void {
-  const html = document.documentElement
-  for (const attr of OTHER_ACTIVE_ATTRS) html.removeAttribute(attr)
-  html.setAttribute(ACTIVE_ATTR, '')
-  document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: PANEL_NAME }))
-}
-
-export function deactivatePanel(): void {
-  document.documentElement.removeAttribute(ACTIVE_ATTR)
-}
-
-/** 其它面板激活事件：把我们关掉。 */
-export function onOtherPanelActivate(event: Event): void {
-  const name = (event as CustomEvent).detail
-  if (typeof name === 'string' && OTHER_PANEL_NAMES.includes(name) && controller.getSnapshot().panelOpen) {
-    controller.close()
-  }
+/**
+ * React 端订阅 controller 状态的 hook。组件只需在 render 期间调一次，
+ * 返回的 snapshot 是 controller 当前状态的不可变快照。
+ */
+export function usePanelSnapshot(): { panelOpen: boolean; activeConnectionId: string | null } {
+  return useSyncExternalStore(
+    controller.subscribe,
+    controller.getSnapshot,
+    controller.getSnapshot,
+  )
 }

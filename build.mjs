@@ -27,7 +27,36 @@ const clientOptions = {
   format: 'iife',
   target: 'chrome100',
   loader: { '.css': 'text' },
-  // react 内联进产物，不依赖 loader 的模块表（除 css 外无任何外部依赖）
+  // ⚠️ 必须把 React/ReactDOM 留作 external —— esbuild 默认会把 react 内联进产物，
+  // 那会引入 **第二份** React 实例，hooks 调用时 dispatch 指向我们内联的 React，
+  // 而 DSH 主机用的是它自己的 React，结果 `de.current` 是 null，所有 hook 都抛
+  // "Cannot read properties of null (reading 'useSyncExternalStore')"。
+  // 走 loader 的 require 之后，react = require('react') 返回的是 DSH staticModules
+  // 里那份 React，dispatcher 与主机 React 一致。
+  // DSH staticModules 表暴露的就是这些平台种子词。
+  external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'],
+  // 用 banner/footer 把 iife 输出套进 DSH 的 factory 闭包：factory(require) 接收
+  // loader 给的 require，把 react/react-dom 等外部包都通过它解析到 host React。
+  // iife 的 globalName 让产物把 module.exports 挂到 __dsh_db_console_module__。
+  globalName: '__dsh_db_console_module__',
+  banner: {
+    js: [
+      'window.__ModuleLoader__.load({',
+      '  id: "@snowlocked/dsh-database-console",',
+      '  factory: (require) => {',
+      '    "use strict";',
+      '    var __dsh_db_module = { exports: {} };',
+      '    var __dsh_db_exports = __dsh_db_module.exports;',
+      '    Object.defineProperty(__dsh_db_exports, Symbol.toStringTag, { value: "Module" });',
+    ].join('\n'),
+  },
+  footer: {
+    js: [
+      '    return __dsh_db_console_module__;',
+      '  },',
+      '});',
+    ].join('\n'),
+  },
   outfile: join(root, 'dist/dsh-database-console.client.js'),
   logLevel: 'info',
   minify: true,

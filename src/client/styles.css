@@ -338,10 +338,21 @@ html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ss
   display: none !important;
 }
 
-/* 侧边栏入口行（纯 DOM，跟随 shell 视觉）
-   配色遵循 DSH 语义别名：默认 label-secondary；激活 interactive-bg-active + label-primary + 600 */
+/* DSH footerActions 容器默认是 `display: flex; flex-wrap: nowrap`，所有
+   sidebar.footer.action entry 都被挤在第一行。覆盖为 wrap，让我们这种
+   flex-basis: 100% 的 entry 真的换行到下一行（光写 `flex: 0 0 100%` 只会
+   让兄弟 entry 溢出被裁掉，不会换行）。只影响 footerActions 这一个容器，
+   不会污染 sidebar 其它布局。 */
+.hHd-Xa_footerActions {
+  flex-wrap: wrap !important;
+}
+
+/* 侧边栏入口行 —— flex-basis 100% 让自己独占整行，配合父容器 wrap 让后面
+   的 entry（cordis-panel / remote-web-ui 等）排到下一行。 */
 button.db-sidebar-entry {
   box-sizing: border-box;
+  flex: 0 0 100%;
+  max-width: 100%;
   width: 100%;
   display: flex;
   align-items: center;
@@ -355,6 +366,8 @@ button.db-sidebar-entry {
   font: inherit;
   font-size: 13px;
   font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
   text-align: left;
   cursor: pointer;
 }
