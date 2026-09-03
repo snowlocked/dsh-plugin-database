@@ -115,8 +115,9 @@ function ConnectionEditor({
     const label = TYPE_LABELS[form.type]
     const needsHost = form.type !== 'sqlite'
     const needsDatabase = form.type === 'mysql' || form.type === 'mongodb'
+    const supportsDatabase = form.type === 'postgresql' || needsDatabase
     const needsSchema = form.type === 'dameng'
-    return { label, needsHost, needsDatabase, needsSchema, needFile: form.type === 'sqlite' }
+    return { label, needsHost, needsDatabase, supportsDatabase, needsSchema, needFile: form.type === 'sqlite' }
   }, [form.type])
 
   const patch = (partial: Partial<ConnectionInput>): void => {
@@ -228,10 +229,11 @@ function ConnectionEditor({
             <input value={form.file ?? ''} onChange={(e) => patch({ file: e.target.value })} placeholder="C:\\data\\app.db 或 相对路径" />
           </div>
         )}
-        {meta.needsDatabase && (
+        {meta.supportsDatabase && (
           <div className="db-field">
-            <label>数据库名 *{form.type === 'mongodb' ? '（database）' : ''}</label>
-            <input value={form.database ?? ''} onChange={(e) => patch({ database: e.target.value })} />
+            <label>默认数据库{meta.needsDatabase ? ' *' : ''}{form.type === 'mongodb' ? '（database）' : ''}</label>
+            <input value={form.database ?? ''} onChange={(e) => patch({ database: e.target.value })}
+              placeholder={form.type === 'postgresql' ? '可选，留空使用 PostgreSQL 默认库（通常与用户名相同）' : undefined} />
           </div>
         )}
         {meta.needsSchema && (

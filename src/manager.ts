@@ -13,21 +13,23 @@ export interface DialectMeta {
   defaultPort: number | null
   /** 是否支持 schema/owner 选择（界面显示下拉） */
   schemaAware: boolean
-  /** 是否需要 database 字段 */
+  /** 是否必须填写 database 字段 */
   needsDatabase: boolean
+  /** 是否支持填写 database 字段 */
+  supportsDatabase: boolean
   sampleHost: string
 }
 
 const DIALECT_META: Record<DbType, DialectMeta> = {
-  postgresql: { label: 'PostgreSQL', defaultPort: 5432, schemaAware: true, needsDatabase: false, sampleHost: '127.0.0.1' },
-  mysql: { label: 'MySQL', defaultPort: 3306, schemaAware: false, needsDatabase: true, sampleHost: '127.0.0.1' },
-  mongodb: { label: 'MongoDB', defaultPort: 27017, schemaAware: false, needsDatabase: true, sampleHost: '127.0.0.1' },
-  sqlite: { label: 'SQLite', defaultPort: null, schemaAware: false, needsDatabase: false, sampleHost: '' },
-  dameng: { label: '达梦 DM', defaultPort: 5236, schemaAware: true, needsDatabase: false, sampleHost: '127.0.0.1' },
+  postgresql: { label: 'PostgreSQL', defaultPort: 5432, schemaAware: true, needsDatabase: false, supportsDatabase: true, sampleHost: '127.0.0.1' },
+  mysql: { label: 'MySQL', defaultPort: 3306, schemaAware: false, needsDatabase: true, supportsDatabase: true, sampleHost: '127.0.0.1' },
+  mongodb: { label: 'MongoDB', defaultPort: 27017, schemaAware: false, needsDatabase: true, supportsDatabase: true, sampleHost: '127.0.0.1' },
+  sqlite: { label: 'SQLite', defaultPort: null, schemaAware: false, needsDatabase: false, supportsDatabase: false, sampleHost: '' },
+  dameng: { label: '达梦 DM', defaultPort: 5236, schemaAware: true, needsDatabase: false, supportsDatabase: false, sampleHost: '127.0.0.1' },
 }
 
 export function dialectMeta(type: DbType): DialectMeta {
-  return DIALECT_META[type] ?? { label: type, defaultPort: null, schemaAware: false, needsDatabase: false, sampleHost: '' }
+  return DIALECT_META[type] ?? { label: type, defaultPort: null, schemaAware: false, needsDatabase: false, supportsDatabase: false, sampleHost: '' }
 }
 
 export const SUPPORTED_TYPES: DbType[] = ['postgresql', 'mysql', 'mongodb', 'sqlite', 'dameng']
