@@ -65,36 +65,11 @@ dsh plugin --profile web add "link:D:\path\to\dsh-plugin-database\plugins\dsh-da
 
 安装后重启 `dsh web`（Ctrl+F5 刷界面）。之后源码改动执行 `npm run build` 并重启 DSH 即更新。
 
-### 2. 方式 B：npm registry（需先发布，见下方「发布到 npm」）
+### 2. 方式 B：npm registry（待发布后可用）
 
 ```bash
 dsh plugin --profile web add dsh-database-console
 ```
-
-#### 发布到 npm（发布一次，之后所有人可直接 add）
-
-插件以 `plugins/dsh-database-console/` 为发布源（与 `link:` 安装是同一形态：顶层 `lib/index.js` + `cordis.patch.yml` + package.json 的 `dsh.bundle.patch` 元数据）。仓库根的 `package.json` 已标记 `private: true` 防止误发布同名包。
-
-```bash
-# 0) 前置：注册 npm 账号（https://www.npmjs.com/signup）；若本地 registry 是镜像需先切官方
-npm config set registry https://registry.npmjs.org
-
-# 1) 登录（一次性，交互输入账号/密码/OTP）
-npm login
-
-# 2) 进入插件包目录发布（prepack 自动运行 node ../../build.mjs 重建 lib）
-cd plugins/dsh-database-console
-npm publish            # 发布 dsh-database-console@0.1.0
-
-# 3) 验证
-npm view dsh-database-console
-npm pack --dry-run     # 发布前本地检查包内容（应为 lib/ + cordis.patch.yml + README + package.json）
-
-# 4) 迭代发布：改版本后重复第 2 步
-npm version patch      # 0.1.0 → 0.1.1（在 plugins/dsh-database-console 内执行）
-```
-
-发布后（npmmirror 等镜像同步约几分钟）即可让任何机器执行 `dsh plugin --profile web add dsh-database-console`，pnpm 会自动安装 dmdb/pg/mysql2/mongodb 等依赖。
 
 ### 3. 方式 C：没有 dsh CLI 时手工等价操作
 
