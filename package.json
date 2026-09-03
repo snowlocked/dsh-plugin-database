@@ -1,5 +1,5 @@
 {
-  "name": "dsh-database-console",
+  "name": "@snowlocked/dsh-database-console",
   "version": "0.1.0",
   "private": true,
   "description": "DSH 数据库工作台插件：连接 PostgreSQL / MySQL / MongoDB / SQLite / 达梦 DM，浏览表结构与数据、执行 SQL、AI 自然语言查数（注册 DB 工具供对话中的 AI 调用）。",

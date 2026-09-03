@@ -39,14 +39,14 @@ DSH 的 web profile 是一个 pnpm 工程：`package.json` 的 `dsh.profile.bund
    在 `D:\Users\wuzan\.dsh\profiles\web` 下执行：
 
    ```bash
-   pnpm add "dsh-database-console@link:D:/Users/wuzan/project/dsh-plugin-database/plugins/dsh-database-console"
+   pnpm add "@snowlocked/dsh-database-console@link:D:/Users/wuzan/project/dsh-plugin-database/plugins/dsh-database-console"
    ```
 
    或手工编辑 `profiles/web/package.json`：
 
    ```json
    "dependencies": {
-     "dsh-database-console": "link:D:/Users/wuzan/project/dsh-plugin-database/plugins/dsh-database-console"
+     "@snowlocked/dsh-database-console": "link:D:/Users/wuzan/project/dsh-plugin-database/plugins/dsh-database-console"
    }
    ```
 
@@ -56,7 +56,7 @@ DSH 的 web profile 是一个 pnpm 工程：`package.json` 的 `dsh.profile.bund
    缺失时只影响对应数据库类型，不影响其他功能）。
 
 2. **注册到 bundles 列表**：在 `profiles/web/package.json` 的 `dsh.profile.bundles`
-   数组中追加 `"dsh-database-console"`。
+   数组中追加 `"@snowlocked/dsh-database-console"`。
 
 3. **重启 DSH**（`dsh web`）。loader 按 bundles 顺序扫描每个包的
    `dsh.bundle.patch`（即插件的 `cordis.patch.yml`），生成

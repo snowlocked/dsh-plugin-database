@@ -1,4 +1,4 @@
 - insert:
     - id: dsh-database-console
-      name: dsh-database-console
+      name: '@snowlocked/dsh-database-console'
       config: {}

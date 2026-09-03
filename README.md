@@ -68,7 +68,7 @@ dsh plugin --profile web add "link:D:\path\to\dsh-plugin-database\plugins\dsh-da
 ### 2. 方式 B：npm registry（需先发布，见下方「发布到 npm」）
 
 ```bash
-dsh plugin --profile web add dsh-database-console
+dsh plugin --profile web add @snowlocked/dsh-database-console
 ```
 
 #### 发布到 npm（发布一次，之后所有人可直接 add）
@@ -84,10 +84,10 @@ npm login
 
 # 2) 进入插件包目录发布（prepack 自动运行 node ../../build.mjs 重建 lib）
 cd plugins/dsh-database-console
-npm publish            # 发布 dsh-database-console@0.1.0
+npm publish            # 发布 @snowlocked/dsh-database-console@0.1.0
 
 # 3) 验证
-npm view dsh-database-console
+npm view @snowlocked/dsh-database-console
 npm pack --dry-run     # 发布前本地检查包内容（应为 lib/ + cordis.patch.yml + README + package.json）
 
 # 4) 迭代发布：改版本后重复第 2 步
@@ -100,8 +100,8 @@ npm version patch      # 0.1.0 → 0.1.1（在 plugins/dsh-database-console 内�
 
 ```bash
 # 编辑 ~/.dsh/profiles/web/package.json：
-#   dependencies 增加  "dsh-database-console": "link:D:/绝对路径/plugins/dsh-database-console"
-#   dsh.profile.bundles 数组末尾追加 "dsh-database-console"
+#   dependencies 增加  "@snowlocked/dsh-database-console": "link:D:/绝对路径/plugins/dsh-database-console"
+#   dsh.profile.bundles 数组末尾追加 "@snowlocked/dsh-database-console"
 cd ~/.dsh/profiles/web && pnpm install
 ```
 
@@ -143,5 +143,5 @@ Web 端集成与内置插件同构：浏览器 bundle 以 `window.__ModuleLoader
 无 loader 的普通页面打开同一 bundle 会退化为独立预览浮层。
 
 安装到 Web profile（`~/.dsh/profiles/web`）的完整步骤见 **`docs/INSTALL-WEB-PROFILE.md`**：
-`pnpm add` link 依赖 → `dsh.profile.bundles` 追加 `dsh-database-console` → 重启 `dsh web` →
+`pnpm add` link 依赖 → `dsh.profile.bundles` 追加 `@snowlocked/dsh-database-console` → 重启 `dsh web` →
 Settings → Plugins 可见可管理。
