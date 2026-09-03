@@ -2,6 +2,10 @@
 node_modules/
 **/node_modules/
 
+# 根目录构建产物（可安装插件包 plugins/dsh-database-console/lib 保留入库，
+# 使克隆/发布零构建即可用；根 dist/ 仅为开发期 bundle，根包已 private 不发布）
+dist/
+
 # 日志与系统文件
 *.log
 npm-debug.log*
