@@ -137,10 +137,14 @@ cd ~/.dsh/profiles/web && pnpm install
 
 ## 左侧菜单 & 界面入口（DSH Web）
 
-Web 端集成与内置插件同构：浏览器 bundle 以 `window.__ModuleLoader__.load` 注册（内联 React，
-不依赖 loader 模块表），`apply` 挂载**左侧边栏「数据库」入口行**并在中栏渲染工作台面板
-（`html[data-dsh-database-active]` 显隐、与 task-board/ssh 面板互斥、点击会话自动交还对话）；
-无 loader 的普通页面打开同一 bundle 会退化为独立预览浮层。
+Web 端集成走 DSH slot 模型，与内置插件同构：
+
+- `apply` 通过 `ctx.slots.inject/register` 挂三条 slot：
+  - **`sidebar.footer.action`** list slot 新增一个 entry（id=`database`，order=-10），渲染底部入口按钮
+  - **`database.console`** 自定义 single root slot（id=`dsh`，含子 slot `database.console.toolbar`）
+  - **`shell.overlay`** list slot 注册 host（id=`database.console`），host 内部 `props.renderSlot('database.console', owner)` 嵌入工作台
+- bundle 的 factory 接收 DSH loader 给的 `require`，**React/ReactDOM 走 host 静态模块**（不做内联），保证 dispatcher 与 host 一致、避免 `useSyncExternalStore` 跨实例 `de.current` 为 null
+- bundle 在 DSH 外环境（普通页面）打开时退化为右下角悬浮独立预览
 
 安装到 Web profile（`~/.dsh/profiles/web`）的完整步骤见 **`docs/INSTALL-WEB-PROFILE.md`**：
 `pnpm add` link 依赖 → `dsh.profile.bundles` 追加 `@snowlocked/dsh-database-console` → 重启 `dsh web` →
