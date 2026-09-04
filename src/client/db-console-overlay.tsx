@@ -1,76 +1,66 @@
 /**
  * `database.console` slot 注册组件 —— 工作台面板。
  *
- * 原 `center-panel.tsx` 自己挑列、自己挂载、自己互斥兄弟面板；
- * 现在切到 slot 模型：占位的是 layout 的 `shell.overlay`（frame-wide 浮层，
- * 已在 ui-layout 注册、key 为 `shell.overlay`）。我们只声明并注册
- * `database.console` 这一个 single root-scope slot，然后由 `index.tsx`
- * 在 `shell.overlay` 里 renderSlot('database.console')。
+ * 渲染 <App/>（含左侧连接导航 + 右侧多 Tab 工作区）。
  *
- * 渲染本身仍是原 <App/>（提供独立 onClose、standalone 标记）；
- * 本组件是 React 树：controller 订阅 → 显隐 → 把 onClose 透传给 App。
+ * ⚠️ 必须保留 `<div id="dsh-database-console">` 这层 wrapper：styles.css 里所有
+ * 选择器都以 `#dsh-database-console` 为根限定（`#dsh-database-console .db-topbar {…}`、
+ * `#dsh-database-console * {…}`），没这个 id 整个主题样式全失效。
+ *
+ * 几何策略：shell.overlay 父节点是 `position: absolute; inset: 0` 覆盖整个 frame
+ * （含左右侧栏）。DSH 是三栏 layout —— sidebar | center | details（右侧详情栏可
+ * 展开/收起/拖宽）。本组件用 ResizeObserver 分别跟踪：
+ *   - `[class*="sidebarCol"]`  —— 左侧栏宽度 → left
+ *   - `[class*="detailsCol"]`  —— 右侧详情栏宽度 → right
+ * 让面板始终正好盖在 **中栏** 上：左/右侧栏开合与拖宽时自动重排，不再被右侧
+ * 详情栏盖住，也不遮挡它的拖拽手柄。
+ *
+ * 显隐语义（配合 index.tsx 的 shell.overlay host）：
+ *   - `hidden` 为 true 时只做 display:none —— App 保持挂载，关闭面板再打开时
+ *     所有 Tab / 子视图 / SQL 文本等状态原样保留（不再“每次都重置”）。
+ *   - 从未打开过且非 standalone 时由 host 直接不渲染本组件。
  */
-import { useEffect, useState, useSyncExternalStore } from 'react'
-import { controller } from './controller.ts'
+import { useEffect, useState } from 'react'
 import App from './App.tsx'
 import type { DatabaseConsoleOwnerProps } from './contract/slots.d.ts'
 
-/**
- * 同 DatabaseSidebarEntry 的注意事项 —— 直接以函数组件形式传给 slot.register，
- * 不要在外面再套一层 `(props) => DatabaseConsoleOverlay(props)` 的 lambda，
- * 否则 hooks 会在 React render context 外被调用而抛 null。
- *
- * ⚠️ 必须保留 `<div id="dsh-database-console">` 这层 wrapper：styles.css 里 88 条
- * 选择器都以 `#dsh-database-console` 为根限定（`#dsh-database-console .db-topbar {…}`、
- * `#dsh-database-console * {…}`），没这个 id 整个主题样式全失效。
- * 旧 `center-panel.tsx` 自己 createRoot 到这个 div；切到 slot 之后 wrapper 由
- * 本组件提供，slot 渲染器（`react_jsx_runtime.jsx(Comp, props)`）把我们的返回值
- * 直接挂进 `shell.overlay` 的 React 树。
- *
- * `shell.overlay` 节点本身是 `position: absolute; inset: 0` 覆盖整个 frame（含
- * 侧边栏）。我们手动把 wrapper 限制在「侧栏之后」并撑满高度；用 ResizeObserver
- * 跟 `.pI_x6G_sidebarCol` 的实际宽度——用户拖动侧栏时跟着重排。
- */
 export function DatabaseConsoleOverlay(props: DatabaseConsoleOwnerProps): JSX.Element | null {
-  const snapshot = useSyncExternalStore(
-    controller.subscribe,
-    controller.getSnapshot,
-    controller.getSnapshot,
-  )
-  const [sidebarWidth, setSidebarWidth] = useState<number>(SIDEBAR_FALLBACK_PX)
+  const [track, setTrack] = useState<{ left: number; right: number }>({ left: SIDEBAR_FALLBACK_PX, right: 0 })
 
-  // 跟 ui-layout 的 sidebar 列宽。layout 注入的 className hash 偶尔会变，但
-  // `sidebarCol` 这一段是稳定的，所以用 attribute selector 匹配。
+  // 跟 ui-layout 的三栏几何。layout 注入的 className hash 偶尔会变，但
+  // `sidebarCol` / `detailsCol` 这两段是稳定的，所以用 attribute selector 匹配。
   useEffect(() => {
     if (typeof document === 'undefined') return
     const sidebar = document.querySelector<HTMLElement>('[class*="sidebarCol"]')
-    if (sidebar === null) return
+    const details = document.querySelector<HTMLElement>('[class*="detailsCol"]')
+    if (sidebar === null && details === null) return
     const update = (): void => {
-      const rect = sidebar.getBoundingClientRect()
-      if (rect.width > 0) setSidebarWidth(rect.width)
+      setTrack({
+        left: sidebar !== null ? sidebar.getBoundingClientRect().width : SIDEBAR_FALLBACK_PX,
+        right: details !== null ? details.getBoundingClientRect().width : 0,
+      })
     }
     update()
     const ro = new ResizeObserver(update)
-    ro.observe(sidebar)
+    if (sidebar !== null) ro.observe(sidebar)
+    if (details !== null) ro.observe(details)
     return () => ro.disconnect()
   }, [])
 
-  if (!snapshot.panelOpen && !props.standalone) return null
   return (
     <div
       id="dsh-database-console"
+      data-hidden={props.hidden ? 'true' : undefined}
       style={{
-        // shell.overlay 父节点已 `position: absolute; inset: 0` 覆盖整个 frame。
-        // 我们手动把 wrapper 推到侧栏右边、贴顶贴底、背景色填满、纵向滚动。
         position: 'absolute',
-        left: sidebarWidth,
+        left: Math.max(0, Math.round(track.left)),
         top: 0,
-        right: 0,
+        right: Math.max(0, Math.round(track.right)),
         bottom: 0,
         background: 'var(--db-bg)',
-        display: 'flex',
+        display: props.hidden ? 'none' : 'flex',
         flexDirection: 'column',
-        overflow: 'auto',
+        overflow: 'hidden',
         zIndex: 1,
       }}
     >
@@ -79,6 +69,6 @@ export function DatabaseConsoleOverlay(props: DatabaseConsoleOwnerProps): JSX.El
   )
 }
 
-/** 用户拉窄视口到 narrow 模式时 layout 折叠 sidebar 到 56px rail；这个值与
+/** 用户拉窄视口到 narrow 模式时 layout 折叠 sidebar 到窄 rail；这个值与
  *  createLayoutStore 默认值（280px）一起取最坏情况下的回退。 */
 const SIDEBAR_FALLBACK_PX = 280

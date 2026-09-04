@@ -36,7 +36,7 @@ export interface DatabaseSidebarEntryProps {
  * "rendering fiber" 处理时被调用，导致 `useSyncExternalStore` 抛 null deref。
  */
 export function DatabaseSidebarEntry(props: DatabaseSidebarEntryProps): JSX.Element {
-  const { wide = true, t = ((key) => key) as unknown as DatabaseTranslate } = props
+  const { wide = true, t = ((key: string) => key) as unknown as DatabaseTranslate } = props
   const tt = t as DatabaseTranslate
   // 订阅 controller 让激活态跟随面板状态 —— React 端无须自己读写 DOM 属性。
   const snapshot = useSyncExternalStore(

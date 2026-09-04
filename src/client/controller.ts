@@ -2,8 +2,12 @@
  * 面板开关控制器（纯 JS，无 React）：驱动侧边栏入口高亮与中栏面板可见性。
  * 在 slot 模型下不再做属性 + 全局事件互斥 —— 由 shell.overlay 浮层
  * 直接管理可见性，controller 退化为单例的开关 + 订阅器。
+ *
+ * 打开状态会写入 localStorage：刷新页面后恢复上次是否打开工作台
+ * （内容恢复见 App：恢复上次连接焦点）。
  */
 import { useSyncExternalStore } from 'react'
+import { readPersist, writePersist } from './persist.ts'
 
 export const PANEL_NAME = 'database'
 
@@ -16,7 +20,7 @@ export interface PanelController {
   setActiveConnection(id: string | null): void
 }
 
-let panelOpen = false
+let panelOpen = readPersist().panelOpen === true
 let activeConnectionId: string | null = null
 const listeners = new Set<() => void>()
 const emit = (): void => {
@@ -34,12 +38,17 @@ interface PanelSnapshot {
 }
 const SNAPSHOT_OPEN: PanelSnapshot = Object.freeze({ panelOpen: true, activeConnectionId: null })
 const SNAPSHOT_CLOSED: PanelSnapshot = Object.freeze({ panelOpen: false, activeConnectionId: null })
-let currentSnapshot: PanelSnapshot = SNAPSHOT_CLOSED
+let currentSnapshot: PanelSnapshot = panelOpen ? SNAPSHOT_OPEN : SNAPSHOT_CLOSED
 const rebuildSnapshot = (): void => {
   // 用最少的两个 immutable 快照复用：open/closed 切换时换另一个常量对象。
-  // activeConnectionId 暂时不会变（setActiveConnection 由 controller 独占），
-  // 等真接进去之后再扩展。
   currentSnapshot = panelOpen ? SNAPSHOT_OPEN : SNAPSHOT_CLOSED
+}
+const rememberOpen = (): void => {
+  try {
+    writePersist({ panelOpen })
+  } catch {
+    /* 忽略 */
+  }
 }
 
 export const controller: PanelController = {
@@ -47,17 +56,20 @@ export const controller: PanelController = {
     if (panelOpen) return
     panelOpen = true
     rebuildSnapshot()
+    rememberOpen()
     emit()
   },
   close() {
     if (!panelOpen) return
     panelOpen = false
     rebuildSnapshot()
+    rememberOpen()
     emit()
   },
   toggle() {
     panelOpen = !panelOpen
     rebuildSnapshot()
+    rememberOpen()
     emit()
   },
   getSnapshot: () => currentSnapshot,

@@ -34,6 +34,8 @@ export interface DatabaseConsoleOwnerProps {
   onClose: () => void
   /** 是否处于独立预览模式（无 DSH shell 时为 true）。 */
   standalone: boolean
+  /** 面板已关闭但保持挂载：注册组件应 display:none 而非卸载（状态保留）。 */
+  hidden?: boolean
 }
 
 /** `database.console.toolbar` 列表项的 owner props。 */

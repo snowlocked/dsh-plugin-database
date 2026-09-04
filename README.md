@@ -4,7 +4,10 @@ DSH（DeepSeek Harness）**数据库工作台**插件：把数据库搬进对话
 
 - 支持 5 种数据库：**PostgreSQL、MySQL、MongoDB、SQLite（Node 内置驱动，零原生依赖）、达梦 DM（官方 dmdb 驱动）**
 - 连接管理（保存/测试/删除，密码支持 `env:VAR` 或 `cred:NAME` 引用，存储文件 `chmod 600`）
-- 数据浏览：schema/模式、表/视图/集合、字段结构、分页预览
+- 工作台 UI（IDE 式）：左侧“连接管理 + 连接对象树”，右侧多 Tab ——
+  每张表/视图/集合一个工作区 Tab（点表即开、重复点自动定位旧 Tab、可关闭、过多时横向滚动）；
+  每个 Tab 内含「数据浏览 / SQL 查询 / 自然语言查询」三个子页，子页各自保持状态，
+  面板收起再打开同样保留上次内容
 - SQL 控制台：多语句、参数绑定、只读模式（默认开启，写操作需显式取消）
 - AI 自然语言查数：自动采集表结构 → 生成只读 SQL →（可选）直接执行返回结果；AI 模型**复用 DSH 自身配置**，界面“按需选模型”，不在插件里重复填 Key
 - 对话中给 AI 注册的 DB 工具：`db_connections` / `db_tables` / `db_table_schema` / `db_query`（全部只读）
@@ -112,10 +115,15 @@ cd ~/.dsh/profiles/web && pnpm install
 - HTTP API：DSH 真实 webServer **仅支持 POST**（GET→404 / DELETE→405，已实测），因此全部接口为 `POST + JSON body`：
   `/state`、`/connections/list`、`/connections/save|test`、`/connection`（详情）、`/connection/remove`、
   `/connection/databases|schemas|tables|columns|rows`、`/connection/cell/update`、`/query`、`/ai/models`、`/ai/generate`、`/ai/run`
-- Web GUI：左侧「数据库」入口 → 中栏工作台（连接管理 / 数据浏览 / SQL 控制台 / 自然语言查询 四页签）；
-  PG/MySQL 支持顶部 **数据库下拉切换**（浏览/控制台/AI 均针对所选库，PG 库内再选 schema）；
-  数据浏览：字段结构默认折叠可展开；数据表**列宽可拖动**、横向/纵向滚动、单元格**单行展示 + 原生 title**，
-  **点击单元格在右侧查看/编辑**（按主键 UPDATE，无主键表禁用，MongoDB 只读提示）
+- Web GUI：左侧「数据库」入口 → 中栏工作台。左栏 = 连接管理（新建/编辑/删除/刷新）＋ 连接对象树
+  （展开连接可选 数据库(PG/MySQL)/schema(PG/达梦)，点表/视图/集合在右侧打开该表的**工作区 Tab**，
+  一个 Tab 内再分三个子页：📚数据浏览 / ⌨️SQL 查询 / 💬自然语言查询，各自独立保持状态）；
+  数据浏览子页：字段结构展开、分页预览、整表排序/过滤、列宽拖拽、单元格点击编辑
+  （按主键 UPDATE，无主键表禁用，MongoDB 只读提示）；
+  SQL/自然语言子页默认跟随该表所在库（PG/MySQL 可在子页内切换目标库）。
+  Tab 可关闭、过多时横向滚动、重复点同一对象自动定位旧 Tab；面板几何自动跟随 DSH 左右侧栏
+  （含右侧详情栏开合/拖宽），收起再打开、切换 Tab 均保持各工作区状态；
+  刷新页面后恢复上次是否打开面板与上次使用的连接。
   无 DSH 环境打开 client bundle 则退化为右下角悬浮独立预览
 - 对话：AI 可直接调用 4 个只读 DB 工具；插件同时写入系统提示指导用法
 

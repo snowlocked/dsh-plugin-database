@@ -612,3 +612,309 @@ button.db-sidebar-entry svg {
   border-radius: 6px;
   background: var(--db-panel);
 }
+
+/* ===== 新布局：左侧导航 + 右侧多 Tab 工作区 ===== */
+
+#dsh-database-console .db-app {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+#dsh-database-console .db-topbar {
+  margin: 10px 12px 0;
+}
+#dsh-database-console .db-app-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 10px;
+  padding: 10px 12px 12px;
+}
+
+/* ---------- 左侧导航（连接管理 + 对象树） ---------- */
+#dsh-database-console .db-nav {
+  flex: 0 0 268px;
+  width: 268px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  background: var(--db-panel);
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  padding: 10px;
+}
+#dsh-database-console .db-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+#dsh-database-console .db-nav-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--db-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#dsh-database-console .db-nav-head button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+#dsh-database-console .db-nav-editor {
+  background: var(--db-panel-2);
+  border-color: var(--db-accent);
+}
+#dsh-database-console .db-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+#dsh-database-console .db-conn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+}
+#dsh-database-console .db-conn-row:hover {
+  background: var(--db-accent-weak);
+  border-color: rgba(76, 141, 255, 0.35);
+}
+#dsh-database-console .db-conn-row.db-conn-active {
+  background: var(--db-accent-weak);
+  border-color: var(--db-accent);
+}
+#dsh-database-console .db-conn-caret {
+  flex: 0 0 auto;
+  color: var(--db-muted);
+  font-size: 10px;
+  width: 12px;
+  text-align: center;
+}
+#dsh-database-console .db-conn-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#dsh-database-console .db-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#dsh-database-console .db-dot-ok {
+  background: var(--db-ok);
+}
+#dsh-database-console .db-dot-bad {
+  background: var(--db-err);
+}
+
+#dsh-database-console .db-tree-host {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 4px 14px;
+  padding: 8px;
+  border: 1px solid var(--db-border);
+  border-radius: 8px;
+  background: var(--db-bg);
+  min-width: 0;
+}
+#dsh-database-console .db-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-hint {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+#dsh-database-console .db-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-row > .db-muted {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+#dsh-database-console .db-tree-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+#dsh-database-console .db-tree-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+#dsh-database-console .db-tree-table {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--db-text);
+  font-size: 12px;
+  text-align: left;
+  padding: 3px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-table:hover {
+  background: var(--db-accent-weak);
+  border-color: rgba(76, 141, 255, 0.4);
+}
+#dsh-database-console .db-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-actions button {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+/* ---------- 右侧 Tab 工作区 ---------- */
+#dsh-database-console .db-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--db-panel);
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  overflow: hidden;
+}
+#dsh-database-console .db-tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 6px 0;
+  border-bottom: 1px solid var(--db-border);
+  background: rgba(0, 0, 0, 0.12);
+  scrollbar-width: thin;
+}
+#dsh-database-console .db-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 240px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  color: var(--db-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  user-select: none;
+}
+#dsh-database-console .db-tab:hover {
+  background: rgba(76, 141, 255, 0.1);
+  color: var(--db-text);
+}
+#dsh-database-console .db-tab.db-tab-active {
+  background: var(--db-panel-2);
+  border-color: var(--db-border);
+  color: var(--db-text);
+  box-shadow: inset 0 1px 0 var(--db-accent);
+}
+#dsh-database-console .db-tab-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+#dsh-database-console .db-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+#dsh-database-console .db-tab-close {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+}
+#dsh-database-console .db-tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 95, 86, 0.2);
+  color: var(--db-err);
+}
+#dsh-database-console .db-tabpanes {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  position: relative;
+}
+#dsh-database-console .db-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px 24px;
+}
+#dsh-database-console .db-pane-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+#dsh-database-console .db-ws-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+#dsh-database-console .db-ws-icon {
+  font-size: 15px;
+}
+#dsh-database-console .db-ws-name {
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 窄屏时给数据浏览网格更高的可视区（Tab 内滚动时保留页脚） */
+#dsh-database-console .db-gridx-body {
+  max-height: 62vh;
+}

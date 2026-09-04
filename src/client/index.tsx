@@ -16,7 +16,7 @@
  * React dispatcher，不会再抛 "Cannot read properties of null (reading
  * 'useSyncExternalStore')"。
  */
-import { useSyncExternalStore } from 'react'
+import { useEffect, useRef } from 'react'
 import { DatabaseSidebarEntry } from './db-sidebar-entry.tsx'
 import { DatabaseConsoleOverlay } from './db-console-overlay.tsx'
 import { ensureThemeStyle } from './theme.ts'
@@ -33,6 +33,10 @@ export const inject: string[] = ['slots', 'locale']
  * shell.overlay 列表槽位的 entry。layout 的 <ShellOverlayOutlet/> 替我们把这个组件
  * 渲染进 frame-wide portal，框架通过 props.renderSlot 注入子 slot 渲染器。
  * 我们负责声明并渲染 `database.console` 这个 single root slot。
+ *
+ * 首次打开后保持挂载（host 不再卸载子 slot）：关闭面板时把 `hidden` 透传给
+ * DatabaseConsoleOverlay（display:none），App 及其全部 Tab 状态因此跨“关闭再打开”
+ * 保留；这对“每次打开数据库弹出内容需保持上次状态”至关重要。
  */
 interface ShellOverlayHostProps {
   renderSlot: (key: 'database.console', owner: DatabaseConsoleOwnerProps) => JSX.Element | null
@@ -42,10 +46,17 @@ interface ShellOverlayHostProps {
 
 function DatabaseShellOverlayHost({ renderSlot, standalone = false }: ShellOverlayHostProps): JSX.Element | null {
   const snapshot = usePanelSnapshot()
-  if (!snapshot.panelOpen && !standalone) return null
+  const everOpened = useRef(false)
+  useEffect(() => {
+    if (snapshot.panelOpen) everOpened.current = true
+  }, [snapshot.panelOpen])
+  // 从未打开过 → 什么都不渲染；打开过一次后保持渲染，仅切换可见性。
+  if (!snapshot.panelOpen && !standalone && !everOpened.current) return null
+  const visible = snapshot.panelOpen || standalone
   return renderSlot('database.console', {
     onClose: () => controller.close(),
     standalone,
+    hidden: !visible,
   })
 }
 
