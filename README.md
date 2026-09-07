@@ -10,7 +10,9 @@ DSH（DeepSeek Harness）**数据库工作台**插件：把数据库搬进对话
   面板收起再打开同样保留上次内容
 - SQL 控制台：多语句、参数绑定、只读模式（默认开启，写操作需显式取消）
 - AI 自然语言查数：自动采集表结构 → 生成只读 SQL →（可选）直接执行返回结果；AI 模型**复用 DSH 自身配置**，界面“按需选模型”，不在插件里重复填 Key
-- 对话中给 AI 注册的 DB 工具：`db_connections` / `db_tables` / `db_table_schema` / `db_query`（全部只读）
+- 对话中给 AI 注册的 DB 工具：`db_connections` / `db_databases` / `db_tables` / `db_table_schema` / `db_query`（全部只读）
+- 会话里“说人话”查库：系统提示注入**连接目录与口语别名**（如“36 数据库”→ 主机 192.168.48.36），
+  连接参数支持按 id/名称/主机末段匹配；`database` 参数支持在同一台服务器的多个库间切换
 
 ## 目录结构
 
@@ -22,9 +24,10 @@ src/
   store.ts            连接持久化（connections.json，脱敏输出）
   ai.ts               NL→SQL（复用 DSH 模型，按需选模型）
   tools.ts            对话 AI 的只读 DB 工具
+  lookup.ts           连接“口语别名/主机段”解析（纯函数，供工具与单测复用）
   dialects/           postgres / mysql / sqlite / mongodb / dameng
   client/             React 单页界面（自行注入样式，无第三方 UI 依赖）
-scripts/smoke.mjs     端到端冒烟（真实 SQLite 文件 + fake ctx 驱动全部路由）
+scripts/smoke.mjs     端到端冒烟（真实 SQLite 文件 + fake ctx 驱动全部路由；末尾含连接别名解析用例）
 plugins/dsh-database-console/  可拷贝安装的插件包（含 lib 产物与 cordis.patch.yml）
 ```
 
@@ -33,6 +36,7 @@ plugins/dsh-database-console/  可拷贝安装的插件包（含 lib 产物与 c
 ```bash
 npm install          # 含 dmdb / mongodb / mysql2 / pg（客户端 react 在 devDependencies）
 npm run build        # 产出 dist/ 与 plugins/dsh-database-console/lib（两处均可作为安装源）
+npm test             # = build + smoke（HTTP 冒烟 + “36 数据库→192.168.48.36”等别名解析用例）
 node scripts/smoke.mjs   # 端到端冒烟（保存/测试/表浏览/参数查询/只读拦截/写语句/删除/AI 失败兜底）
 npm run watch        # 开发热重建
 ```
@@ -125,7 +129,7 @@ cd ~/.dsh/profiles/web && pnpm install
   （含右侧详情栏开合/拖宽），收起再打开、切换 Tab 均保持各工作区状态；
   刷新页面后恢复上次是否打开面板与上次使用的连接。
   无 DSH 环境打开 client bundle 则退化为右下角悬浮独立预览
-- 对话：AI 可直接调用 4 个只读 DB 工具；插件同时写入系统提示指导用法
+- 对话：AI 可直接调用 5 个只读 DB 工具；插件同时写入**动态连接目录**（含口语别名）系统提示指导用法
 
 ## AI 路由（NL→SQL）
 
@@ -134,6 +138,24 @@ cd ~/.dsh/profiles/web && pnpm install
 - 优先级：界面选择（provider/model）> 插件全局配置 `ai`（仅 cordis config 可设）> DSH 自动发现。
 - 生成的 SQL 一律只读校验（仅允许 SELECT/WITH/SHOW/EXPLAIN 等），误生成 DML 会被拦截
 - 表结构摘要默认最多采集 120 张表 × 40 列，避免上下文溢出
+
+## 会话里直接说人话查库（别名解析 / 库切换）
+
+普通对话中不必先背连接 id——把“xxx 数据库里的表”翻译成工具参数即可，例如用户说：
+
+> 查一下 36 数据库 test2 里的 Item 表
+
+含义是：**主机 192.168.48.36**（连接名「48.36」，默认库 `test2`）→ `public."Item"`。
+
+- **connection 参数 = id / 名称 / 口语别名**：别名来自连接名与主机的段、点分后缀。
+  “36”、“48.36”、“192.168.48.36” 都能命中同一连接；匹配按确定性规则打分，
+  多条同分时**报歧义并列出候选**，不猜错库（见 `src/lookup.ts` 的单测）。
+- **db_connections**：返回当前连接目录，每条附主机、默认库/模式与“可写作”的别名。
+- **db_databases**（新）：PG/MySQL 服务器级数据库列表。连接固定在一个库，
+  用户提到“这台机器上的另一个库”时先看它，再把 `database` 传给 `db_tables` / `db_table_schema` / `db_query` 切换。
+- **schema**：PostgreSQL / 达梦的模式(owner)；MySQL 的库与 schema 同义，直接传 `schema`/`database` 均可。
+- SQLite（单文件）与达梦不支持跨库切换，工具会明确报错提示正确姿势。
+- 系统提示里注入“启动时连接目录快照”，列出一行一连接的别名；新增连接后以 `db_connections` 返回为准。
 
 ## 说明与限制
 

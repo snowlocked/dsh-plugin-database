@@ -1,5 +1,5 @@
 // 服务端冒烟：不依赖 cordis，直接模拟 ctx 调用插件 apply，再用内存 fake 路由 handler 驱动 HTTP 层。
-import { apply } from '../dist/dsh-database-console.js'
+import { apply, findConnectionByRef, connectionAliases } from '../dist/dsh-database-console.js'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -182,6 +182,33 @@ let connId = ''
   check('再次删除 ok', rd.json.ok === true, JSON.stringify(rd))
   const r2 = await callSync('POST', '/api/dsh-database-console/connections/list', {})
   check('再次删除后列表空', r2.json.connections.length === 0)
+}
+
+// 8) 连接“口语别名”解析（纯函数；复现真实目录：36 数据库 = 主机 192.168.48.36）
+{
+  const records = [
+    { id: 'db_84ae5e1eff', name: '48.36', type: 'postgresql', host: '192.168.48.36', database: 'test2' },
+    { id: 'db_ac335f59e8', name: '本地商城 MongoDB', type: 'mongodb', host: '192.168.88.14', port: 15363, database: 'external' },
+    { id: 'db_66be671bb4', name: '192.168.48.9 达梦 dce', type: 'dameng', host: '192.168.48.9', schema: 'osc' },
+    { id: 'db_700301f6a3', name: 'dji', type: 'postgresql', host: '192.168.80.8', port: 31415, database: 'osc' },
+  ]
+  const found = (ref, wantId, wantVia) => {
+    const outcome = findConnectionByRef(records, ref)
+    return Boolean(outcome.found) && outcome.found.record.id === wantId && (!wantVia || outcome.found.via === wantVia)
+  }
+  check('别名「36」→ 192.168.48.36 连接', found('36', 'db_84ae5e1eff', 'host'))
+  check('名称「48.36」精确命中', found('48.36', 'db_84ae5e1eff', 'name'))
+  check('完整 IP「192.168.48.36」命中', found('192.168.48.36', 'db_84ae5e1eff', 'host'))
+  check('id 精确命中', found('db_84ae5e1eff', 'db_84ae5e1eff', 'id'))
+  check('达梦「48.9」命中', found('48.9', 'db_66be671bb4', 'host'))
+  check('名称忽略大小写「DJI」', found('DJI', 'db_700301f6a3', 'name'))
+  check('无命中返回 none', findConnectionByRef(records, 'no-such-db').none === true)
+  const ambiguous = findConnectionByRef([...records, { id: 'db_x36', name: 'other36', type: 'mysql', host: '10.0.0.36', database: 'x' }], '36')
+  check('两主机都以 36 结尾 → 报歧义', !ambiguous.found && ambiguous.ambiguous?.length === 2)
+  const nameWins = findConnectionByRef([...records, { id: 'db_tmp', name: '36', type: 'mysql', host: '10.1.1.1' }], '36')
+  check('名称精确「36」优先于主机段匹配', nameWins.found?.record.id === 'db_tmp')
+  const aliases = connectionAliases(records[0])
+  check('48.36 别名含 36/48.36', aliases[0] === '48.36' && aliases.includes('36'))
 }
 
 console.log(failures === 0 ? '\nSMOKE PASS' : `\nSMOKE FAIL (${failures})`)
