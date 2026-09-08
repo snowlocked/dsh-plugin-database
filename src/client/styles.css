@@ -918,3 +918,37 @@ button.db-sidebar-entry svg {
 #dsh-database-console .db-gridx-body {
   max-height: 62vh;
 }
+
+/* ===== 自适应页面宽度 =====
+ * 面板宽度 = DSH 中栏宽度（由 db-console-overlay.tsx 跟踪两列得出），不等于视口
+ * 宽度，所以用 container query（以面板自身为容器）而不是 media query 做内容级
+ * 自适应：中栏被左右侧栏挤压时逐步收紧内边距与左导航宽度，保证工作区可用。
+ * 不支持 container query 的浏览器会整段忽略，回落到固定 268px 导航（渐进增强）。 */
+#dsh-database-console {
+  container-type: inline-size;
+}
+
+@container (max-width: 960px) {
+  #dsh-database-console .db-topbar {
+    margin: 8px 10px 0;
+  }
+  #dsh-database-console .db-app-body {
+    gap: 8px;
+    padding: 8px 10px 10px;
+  }
+  #dsh-database-console .db-nav {
+    flex-basis: 228px;
+    width: 228px;
+  }
+}
+
+@container (max-width: 780px) {
+  #dsh-database-console .db-nav {
+    flex-basis: 192px;
+    width: 192px;
+    padding: 8px;
+  }
+  #dsh-database-console .db-pane {
+    padding: 8px 10px 20px;
+  }
+}
