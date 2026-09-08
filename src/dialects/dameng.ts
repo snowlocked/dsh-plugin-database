@@ -70,6 +70,8 @@ export function createDamengSession(record: ConnectionRecord): DialectSession {
 
   return {
     schemaAware: true,
+    // dmdb 的 getConnection 返回单条物理连接，并发 execute 不安全 → 共享会话复用时串行化
+    serial: true,
     async open() {
       if (conn) return
       const dmdb = await loadDmdb()

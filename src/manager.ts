@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { ConnectionRecord, DialectSession, DbType, QueryResult, RuntimeContext } from './types.ts'
 import type { ConnectionStore } from './store.ts'
 import { DbConsoleError, wrapError } from './errors.ts'
@@ -74,6 +75,174 @@ export async function withSession<T>(
   }
 }
 
+/* ------------------------------------------------------------ 共享会话缓存 ---
+ *
+ * 为什么需要：HTTP 层过去每个请求都 openSession → work → close，一次"展开连接
+ * 对象树"要串行发起 2~3 个请求（databases/schemas/tables），等于重复付 2~3 次
+ * TCP+认证+探测的钱；数据库不可达时每个请求各吃满一次驱动超时（8s），UI 上就
+ * 是"第一次加载要等很久"。这里按"连接参数+已解析密码哈希"缓存已打开的会话并
+ * 跨请求复用，空闲由定时器回收。
+ *
+ * 关键设计：
+ *  - key 含连接 id 与生效参数（含 database 覆盖），密码只进 sha256 哈希；
+ *  - 打开中去重（同一 key 并发请求只建一次连）；
+ *  - work 抛错即丢弃缓存会话，避免"死会话"被钉住（下次调用自动重建）；
+ *  - 达梦等单连接方言（session.serial）用互斥队列串行化操作；
+ *  - 空闲超 60s 由 sweep 关闭（定时器 unref，不阻止进程退出）；总量上限 8，LRU 淘汰。
+ */
+
+interface SharedEntry {
+  recordId: string
+  key: string
+  session: DialectSession
+  lastUsed: number
+  /** serial 方言的操作队列尾部（非 serial 方言不使用） */
+  tail: Promise<void>
+}
+
+const SHARED_IDLE_MS = 60_000
+const SHARED_MAX = 8
+const SWEEP_INTERVAL_MS = 30_000
+
+const sharedEntries = new Map<string, SharedEntry>()
+const sharedInflight = new Map<string, Promise<SharedEntry>>()
+let sweepTimer: ReturnType<typeof setInterval> | null = null
+
+function ensureSweep(): void {
+  if (sweepTimer) return
+  sweepTimer = setInterval(() => {
+    const now = Date.now()
+    for (const entry of [...sharedEntries.values()]) {
+      if (now - entry.lastUsed > SHARED_IDLE_MS) dropShared(entry)
+    }
+    if (sharedEntries.size === 0 && sweepTimer) {
+      clearInterval(sweepTimer)
+      sweepTimer = null
+    }
+  }, SWEEP_INTERVAL_MS)
+  sweepTimer.unref?.()
+}
+
+function sharedKeyOf(record: ConnectionRecord, resolvedPassword: string): string {
+  const digest = createHash('sha256').update(resolvedPassword).digest('hex').slice(0, 16)
+  const parts = [
+    record.id,
+    record.type,
+    record.host ?? '',
+    record.port ?? '',
+    record.user ?? '',
+    record.database ?? '',
+    record.schema ?? '',
+    record.ssl ? 1 : 0,
+    record.file ?? '',
+    record.authSource ?? '',
+    record.dmCompat ?? '',
+    record.dmNoEncrypt ? 1 : 0,
+    JSON.stringify(record.options ?? {}),
+  ]
+  return `${parts.join('|')}#${digest}`
+}
+
+async function acquireShared(record: ConnectionRecord, runtime: RuntimeContext): Promise<SharedEntry> {
+  const resolvedPassword = await resolvePassword(record, runtime.resolveCredential)
+  const effective: ConnectionRecord = resolvedPassword === record.password
+    ? record
+    : { ...record, password: resolvedPassword }
+  const key = sharedKeyOf(effective, resolvedPassword)
+
+  const existing = sharedEntries.get(key)
+  if (existing) {
+    existing.lastUsed = Date.now()
+    return existing
+  }
+  const inflight = sharedInflight.get(key)
+  if (inflight) return inflight
+
+  const opening = (async (): Promise<SharedEntry> => {
+    const session = createDialectSession(effective)
+    await session.open()
+    const entry: SharedEntry = {
+      recordId: effective.id,
+      key,
+      session,
+      lastUsed: Date.now(),
+      tail: Promise.resolve(),
+    }
+    sharedEntries.set(key, entry)
+    ensureSweep()
+    // 总量上限：按 lastUsed 淘汰最久未用的会话
+    while (sharedEntries.size > SHARED_MAX) {
+      let oldest: SharedEntry | undefined
+      for (const candidate of sharedEntries.values()) {
+        if (oldest === undefined || candidate.lastUsed < oldest.lastUsed) oldest = candidate
+      }
+      if (oldest) dropShared(oldest)
+      else break
+    }
+    return entry
+  })()
+  sharedInflight.set(key, opening)
+  try {
+    return await opening
+  } finally {
+    sharedInflight.delete(key)
+  }
+}
+
+function dropShared(entry: SharedEntry): void {
+  if (sharedEntries.get(entry.key) === entry) sharedEntries.delete(entry.key)
+  void entry.session.close().catch(() => undefined)
+}
+
+/** serial 方言（达梦）：同一物理连接上的操作必须排队执行。 */
+function runExclusive<T>(entry: SharedEntry, fn: (session: DialectSession) => Promise<T>): Promise<T> {
+  const result = entry.tail.then(() => fn(entry.session))
+  entry.tail = result.then(() => undefined, () => undefined)
+  return result
+}
+
+/**
+ * 复用共享会话执行一次操作（不关闭会话）。
+ * 会话按连接参数缓存复用；出错时丢弃缓存会话，下次调用重新建连。
+ * 「测试连接」等需要验证真实连通性的场景请改用 withSession（独占新建）。
+ */
+export async function withSharedSession<T>(
+  record: ConnectionRecord,
+  runtime: RuntimeContext,
+  work: (session: DialectSession) => Promise<T>,
+): Promise<T> {
+  const entry = await acquireShared(record, runtime)
+  try {
+    const result = entry.session.serial
+      ? await runExclusive(entry, work)
+      : await work(entry.session)
+    entry.lastUsed = Date.now()
+    return result
+  } catch (reason) {
+    // 出错即丢弃缓存会话：可能是连接被对端断开，避免坏会话被反复复用
+    dropShared(entry)
+    throw reason
+  }
+}
+
+/** 连接被保存/删除后调用：关闭该连接（含 database 覆盖变体）的所有共享会话。 */
+export function invalidateSharedSessions(recordId: string): void {
+  for (const entry of [...sharedEntries.values()]) {
+    if (entry.recordId === recordId) dropShared(entry)
+  }
+}
+
+/** 插件卸载时调用：关闭全部共享会话并停掉 sweep 定时器。 */
+export async function closeAllSharedSessions(): Promise<void> {
+  const entries = [...sharedEntries.values()]
+  sharedEntries.clear()
+  if (sweepTimer) {
+    clearInterval(sweepTimer)
+    sweepTimer = null
+  }
+  await Promise.all(entries.map((entry) => entry.session.close().catch(() => undefined)))
+}
+
 /** 连通性测试：打开会话并执行一次方言级探测。 */
 export async function testConnection(record: ConnectionRecord, runtime: RuntimeContext): Promise<{
   ok: boolean
@@ -116,7 +285,7 @@ export async function introspectSchema(
   const parts: string[] = []
   let tableCount = 0
   let columnCount = 0
-  await withSession(record, runtime, async (session) => {
+  await withSharedSession(record, runtime, async (session) => {
     const schema = record.schema || undefined
     const tables = await session.listTables(schema).catch(() => [] as { name: string; kind: string }[])
     if (tables.length === 0) return

@@ -2,7 +2,7 @@ import type { ConnectionRecord, DbType, QueryResult } from './types.ts'
 import type { ConnectionStore } from './store.ts'
 import { isValidConnectionId } from './store.ts'
 import { DbConsoleError } from './errors.ts'
-import { dialectMeta, isSupportedType, testConnection, withSession } from './manager.ts'
+import { dialectMeta, isSupportedType, testConnection, withSharedSession, invalidateSharedSessions } from './manager.ts'
 import { generateSql } from './ai.ts'
 import { normalizeSchema } from './sqlutil.ts'
 import type { AiSettings } from './ai.ts'
@@ -209,7 +209,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const body = toRecord(await readJsonBody(request))
     const record = connectionOf(deps, idOf(body))
     let databases: string[] = []
-    await withSession(record, runtime, async (session) => {
+    await withSharedSession(record, runtime, async (session) => {
       if (typeof session.listDatabases === 'function') databases = await session.listDatabases()
     })
     sendJson(response, 200, { databases, supported: databases.length > 0 })
@@ -251,6 +251,8 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const body = toRecord(await readJsonBody(request))
     const input = connectionFromBody(body)
     const saved = deps.store.save(input)
+    // 连接参数可能已变化：关闭该连接的共享会话，下次访问按新参数重连
+    invalidateSharedSessions(saved.id)
     const view = deps.store.list().find((item) => item.id === saved.id) ?? saved
     sendJson(response, 200, { connection: view, ok: true })
   })
@@ -282,6 +284,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const body = toRecord(await readJsonBody(request))
     const id = requireId(pickString(body, ['id']) ?? queryParam(request, 'id'))
     const removed = deps.store.remove(id)
+    invalidateSharedSessions(id)
     sendJson(response, 200, { ok: removed })
   })
 
@@ -289,7 +292,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
   add('POST', `${PREFIX}/connection/schemas`, async (request, response) => {
     const body = toRecord(await readJsonBody(request))
     const record = withDatabase(connectionOf(deps, idOf(body)), body)
-    const schemas = await withSession(record, runtime, (session) => session.listSchemas())
+    const schemas = await withSharedSession(record, runtime, (session) => session.listSchemas())
     sendJson(response, 200, { schemas })
   })
 
@@ -297,7 +300,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
   add('POST', `${PREFIX}/connection/tables`, async (request, response) => {
     const body = toRecord(await readJsonBody(request))
     const record = withDatabase(connectionOf(deps, idOf(body)), body)
-    const tables = await withSession(record, runtime, (session) => session.listTables(optSchema(body)))
+    const tables = await withSharedSession(record, runtime, (session) => session.listTables(optSchema(body)))
     sendJson(response, 200, { tables })
   })
 
@@ -305,7 +308,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
   add('POST', `${PREFIX}/connection/columns`, async (request, response) => {
     const body = toRecord(await readJsonBody(request))
     const record = withDatabase(connectionOf(deps, idOf(body)), body)
-    const columns = await withSession(record, runtime, (session) => session.tableColumns(tableOf(body), optSchema(body)))
+    const columns = await withSharedSession(record, runtime, (session) => session.tableColumns(tableOf(body), optSchema(body)))
     sendJson(response, 200, { columns })
   })
 
@@ -334,7 +337,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const options = sort || Object.keys(filters).length > 0
       ? { sort: sort ?? null, filters }
       : undefined
-    const result = await withSession(record, runtime, (session) =>
+    const result = await withSharedSession(record, runtime, (session) =>
       session.preview(tableOf(body), optSchema(body), limit, offset, options))
     sendJson(response, 200, result)
   })
@@ -358,7 +361,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     if (pk.length === 0) throw new DbConsoleError('该行缺少主键定位条件，无法安全编辑（请确认表有主键）', 'CELL_NO_PK', 400)
     const value = body.isNull === true ? null : body.value
     let affectedRows = 0
-    await withSession(record, runtime, async (session) => {
+    await withSharedSession(record, runtime, async (session) => {
       if (typeof session.updateCell !== 'function') {
         throw new DbConsoleError('当前数据库类型暂不支持单元格编辑（仅 PostgreSQL/MySQL/SQLite/达梦）', 'CELL_EDIT_UNSUPPORTED', 400)
       }
@@ -378,7 +381,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const params = Array.isArray(body.params) ? body.params : undefined
     const readOnly = body.readOnly !== false
     const limit = clampLimit(typeof body.limit === 'number' ? body.limit : 200, 1, hard)
-    const result = await withSession(record, runtime, (session) =>
+    const result = await withSharedSession(record, runtime, (session) =>
       session.runQuery({ sql, params, readOnly, allowWrite: !readOnly, hardLimit: limit }))
     sendJson(response, 200, result)
   })
@@ -458,7 +461,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
       model: typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined,
       llm: deps.getLlm() as never,
     })
-    const executed = await withSession(record, runtime, (session) =>
+    const executed = await withSharedSession(record, runtime, (session) =>
       session.runQuery({ sql: generated.sql, params: undefined, readOnly: true, allowWrite: false, hardLimit: limit }))
     sendJson(response, 200, { ...generated, result: executed })
   })

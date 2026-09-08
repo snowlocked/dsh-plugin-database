@@ -3,7 +3,7 @@ import { createConnectionStore, defaultDataDir, isValidConnectionId } from './st
 import { buildApiRoutes, type HttpRoute, type HttpRequest, type HttpResponse } from './http.ts'
 import { registerDatabaseTools } from './tools.ts'
 import { connectionAliases } from './lookup.ts'
-import { dialectMeta } from './manager.ts'
+import { dialectMeta, closeAllSharedSessions } from './manager.ts'
 import type { AiSettings } from './ai.ts'
 import type { ConnectionStore } from './store.ts'
 
@@ -135,6 +135,8 @@ export function apply(ctx: CtxLike, config: PluginConfig = {}): void {
       })
       return () => {
         for (const dispose of disposers) dispose()
+        // 插件停用/热重载时释放复用的数据库会话
+        void closeAllSharedSessions()
       }
     }, 'dsh-database-console: http api')
   })

@@ -135,7 +135,7 @@ export interface PreviewOptions {
   filters?: Record<string, string>
 }
 
-/** 各方言需要实现的运行时接口。每次执行开一个新会话（简单可靠）。 */
+/** 各方言需要实现的运行时接口。默认独占使用；HTTP 层经共享会话缓存复用（见 manager.withSharedSession）。 */
 export interface DialectSession {
   /** 打开底层连接/资源（幂等）。 */
   open(): Promise<void>
@@ -156,6 +156,8 @@ export interface DialectSession {
   runQuery(options: RunQueryOptions): Promise<QueryResult>
   /** 方言是否支持独立 schema/owner 选择 */
   readonly schemaAware: boolean
+  /** 底层是单物理连接、并发执行不安全（如达梦）：共享会话复用时操作需串行化 */
+  readonly serial?: boolean
 }
 
 /** 连接 id → 会话构造器上下文：运行期上下文里可能需要的服务句柄 */

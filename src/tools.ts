@@ -1,6 +1,6 @@
 import type { ConnectionRecord, QueryResult } from './types.ts'
 import type { ConnectionStore } from './store.ts'
-import { dialectMeta, withSession } from './manager.ts'
+import { dialectMeta, withSharedSession } from './manager.ts'
 import { DbConsoleError } from './errors.ts'
 import { isReadOnlyStatement, normalizeSchema, singleStatement } from './sqlutil.ts'
 import { connectionAliases, findConnectionByRef } from './lookup.ts'
@@ -207,7 +207,7 @@ export async function registerDatabaseTools(
     async execute(args: { connection?: string }) {
       const resolved = resolveConnection(deps.store, args.connection)
       const record = resolved.record
-      const databases = await withSession(record, runtime(), (session) =>
+      const databases = await withSharedSession(record, runtime(), (session) =>
         typeof session.listDatabases === 'function' ? session.listDatabases() : Promise.resolve(undefined))
       if (!databases) {
         return {
@@ -263,7 +263,7 @@ export async function registerDatabaseTools(
       const databaseOverride = args.database && args.database.trim() ? args.database.trim() : undefined
       const record = applyDatabase(resolved.record, databaseOverride)
       const schema = normalizeSchema(args.schema)
-      const tables = await withSession(record, runtime(), (session) => session.listTables(schema))
+      const tables = await withSharedSession(record, runtime(), (session) => session.listTables(schema))
       const note = effectiveNote(resolved, databaseOverride)
       const text = tables.length === 0
         ? '（没有找到任何表/视图/集合）'
@@ -313,7 +313,7 @@ export async function registerDatabaseTools(
       const table = typeof args.table === 'string' ? args.table.trim() : ''
       if (!table) throw new DbConsoleError('缺少 table 参数', 'BAD_INPUT', 400)
       const target = normalizeSchema(args.schema)
-      const columns = await withSession(record, runtime(), (session) => session.tableColumns(table, target))
+      const columns = await withSharedSession(record, runtime(), (session) => session.tableColumns(table, target))
       const note = effectiveNote(resolved, databaseOverride)
       const lines = columns.map((column) => {
         const flags = [
@@ -385,7 +385,7 @@ export async function registerDatabaseTools(
         }
       }
       const maxRows = Math.min(Math.max(1, Math.trunc(args.limit ?? 100) || 100), 1000)
-      const result = await withSession(record, runtime(), (session) =>
+      const result = await withSharedSession(record, runtime(), (session) =>
         session.runQuery({ sql, params: [], readOnly: true, allowWrite: false, hardLimit: maxRows }))
       const note = effectiveNote(resolved, databaseOverride)
       return { ok: true, text: resultToText(result, 100), rows: result.rowCount, ...(note ? { note } : {}) }

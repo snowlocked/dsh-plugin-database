@@ -271,26 +271,26 @@ function ConnTree({
     }
   }
 
-  // 挂载即加载：数据库列表 → schema 列表（自动选 public/连接 schema/首个）→ 表
+  // 挂载即加载：数据库列表 ∥ schema 列表（并行）→ 选定模式 → 表
   useEffect(() => {
     const id = ++seq.current
     setLoading('加载对象…')
     setError('')
     void (async () => {
       try {
-        if (switchable) {
-          const r = await dbApi.databases(connection.id)
-          if (!guard(id)) return
-          if (r.supported) setDatabases(r.databases)
-        }
+        // 两个元信息请求互不依赖，并行发出（服务端会复用同一条共享会话）
+        const [dbResult, schemaResult] = await Promise.all([
+          switchable ? dbApi.databases(connection.id) : Promise.resolve(null),
+          aware ? dbApi.schemas(connection.id, undefined) : Promise.resolve(null),
+        ])
+        if (!guard(id)) return
+        if (dbResult?.supported) setDatabases(dbResult.databases)
         let preferred: string | undefined
-        if (aware) {
-          const r = await dbApi.schemas(connection.id, undefined)
-          if (!guard(id)) return
-          setSchemas(r.schemas)
-          preferred = r.schemas.find((entry) => entry.name === 'public')?.name
-            ?? r.schemas.find((entry) => entry.name === connection.schema)?.name
-            ?? r.schemas[0]?.name
+        if (schemaResult) {
+          setSchemas(schemaResult.schemas)
+          preferred = schemaResult.schemas.find((entry) => entry.name === 'public')?.name
+            ?? schemaResult.schemas.find((entry) => entry.name === connection.schema)?.name
+            ?? schemaResult.schemas[0]?.name
           setSchema(preferred)
         }
         await loadTables(id, '', preferred)
