@@ -105,12 +105,35 @@ export function DatabaseConsoleOverlay(_props: Record<string, unknown>): JSX.Ele
     // [data-phase] 是 ConversationRoot 根节点（position:relative），覆盖它即
     // 连头部一起接管；找不到时退化停靠到父容器，仍不影响宿主。
     const dock = anchor.closest<HTMLElement>('[data-phase]') ?? anchor.parentElement
+    // 宿主 header 高度不是 CSS 常量（由 padding+标题行+页签条撑出，≈75.7px），
+    // 这里实测后写入 --db-shell-header-h，让工作台「顶栏+TabBar」总高与它对齐。
+    let headerObserver: ResizeObserver | undefined
+    const applyHeaderHeight = (height: number): void => {
+      if (Number.isFinite(height) && height >= 32) {
+        persistentHost.style.setProperty('--db-shell-header-h', `${height}px`)
+      }
+    }
+    if (dock !== null && dock !== undefined) {
+      const headerEl = dock.querySelector<HTMLElement>('header')
+      if (headerEl !== null) {
+        headerObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const box = entry.borderBoxSize as ReadonlyArray<ResizeObserverSize> | undefined
+            const blockHeight = Array.isArray(box) ? box[0]?.blockSize : undefined
+            applyHeaderHeight(blockHeight ?? headerEl.getBoundingClientRect().height)
+          }
+        })
+        headerObserver.observe(headerEl)
+        applyHeaderHeight(headerEl.getBoundingClientRect().height)
+      }
+    }
     if (dock !== null && dock !== undefined) {
       controller.setDocked(true)
       persistentHost.style.display = 'flex'
       if (persistentHost.parentElement !== dock) dock.appendChild(persistentHost)
     }
     return () => {
+      headerObserver?.disconnect()
       controller.setDocked(false)
       if (persistentHost.parentElement !== document.body) {
         document.body.appendChild(persistentHost)

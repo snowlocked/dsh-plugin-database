@@ -1,30 +1,62 @@
-/* dsh-database-console 客户端样式（暗色主题，无外部依赖） */
+/* dsh-database-console 客户端样式
+ *
+ * 主题策略（对齐番茄工作台 tomato-board）：
+ *   颜色一律引用 DSH Web 的主题 token（--dsw-alias-* / --ds-*），跟随 DSH
+ *   配置的主题（明暗 / 换肤）自动变化；仅在脱离 DSH 的独立预览模式下回落到
+ *   内置暗色值（var() 的 fallback）。
+ *
+ * 布局策略：
+ *   工作台四边不留 margin，区域之间用 1px hairline 分割线（--db-border）分开；
+ *   面板/卡片不再自带描边与底色，尽量少边框。
+ */
 :root {
-  --db-bg: #0e1116;
-  --db-panel: #151a23;
-  --db-panel-2: #1b2230;
-  --db-border: #2a3345;
-  --db-border-strong: #3a4660;
-  --db-text: #e6e9ef;
-  --db-muted: #8b93a3;
-  --db-accent: #4c8dff;
-  --db-accent-weak: rgba(76, 141, 255, 0.14);
-  --db-ok: #37c978;
-  --db-warn: #e0b341;
-  --db-err: #ff5f56;
-  --db-radius: 8px;
+  --db-bg: var(--dsw-alias-bg-base, #12141a);
+  --db-panel: var(--dsw-alias-bg-layer-1, #171a21);
+  --db-panel-2: var(--dsw-alias-bg-layer-2, #1d212b);
+  --db-border: var(--dsw-alias-border-l2, rgba(136, 148, 168, 0.24));
+  --db-border-strong: var(--dsw-alias-border-l3, rgba(136, 148, 168, 0.38));
+  --db-text: var(--dsw-alias-label-primary, #e6e9ef);
+  --db-muted: var(--dsw-alias-label-secondary, #8b93a3);
+  --db-faint: var(--dsw-alias-label-tertiary, #6b7383);
+  --db-accent: var(--dsw-alias-state-business-primary, #4c8dff);
+  --db-accent-weak: color-mix(in srgb, var(--db-accent) 12%, transparent);
+  --db-ok: var(--dsw-alias-state-success-primary, #37c978);
+  --db-warn: var(--dsw-alias-state-warn-primary, #e0b341);
+  --db-err: var(--dsw-alias-state-error-primary, #ff5f56);
+  --db-radius: 10px;
   --db-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+  --db-ease: var(--ds-transition-duration-fast, 120ms) var(--ds-ease-in-out, ease);
+  /* 宿主对话头部实测高度（db-console-overlay 用 ResizeObserver 写入）；
+     拿不到时回落 76px。顶栏 + TabBar 高度之和跟随它，与宿主头部底边对齐。 */
+  --db-shell-header-h: 76px;
+  --db-tabbar-h: 32px;
 }
 
 /* 中栏接管说明：工作台打开时由 db-console-overlay 把持久容器（#dsh-database-console）
    以 absolute inset:0 覆盖到 Conversation 根节点上（参考番茄工作台），不隐藏、
    不修改任何宿主元素，因此这里没有任何针对宿主（头部/composer）的规则。 */
 
+/* token 重声明：DSH 的 --dsw-alias-* 若不是挂在 :root 而是挂在应用容器上，
+   这里在容器自身再求值一次，保证工作台取到正确主题色。 */
 #dsh-database-console {
-  --bg: var(--db-bg);
+  --db-bg: var(--dsw-alias-bg-base, #12141a);
+  --db-panel: var(--dsw-alias-bg-layer-1, #171a21);
+  --db-panel-2: var(--dsw-alias-bg-layer-2, #1d212b);
+  --db-border: var(--dsw-alias-border-l2, rgba(136, 148, 168, 0.24));
+  --db-border-strong: var(--dsw-alias-border-l3, rgba(136, 148, 168, 0.38));
+  --db-text: var(--dsw-alias-label-primary, #e6e9ef);
+  --db-muted: var(--dsw-alias-label-secondary, #8b93a3);
+  --db-faint: var(--dsw-alias-label-tertiary, #6b7383);
+  --db-accent: var(--dsw-alias-state-business-primary, #4c8dff);
+  --db-ok: var(--dsw-alias-state-success-primary, #37c978);
+  --db-warn: var(--dsw-alias-state-warn-primary, #e0b341);
+  --db-err: var(--dsw-alias-state-error-primary, #ff5f56);
+
+  background: var(--db-bg);
   color: var(--db-text);
   font-size: 13px;
   line-height: 1.5;
+  font-family: var(--dsw-font-family, inherit);
   box-sizing: border-box;
 }
 #dsh-database-console *,
@@ -32,15 +64,22 @@
 #dsh-database-console *::after {
   box-sizing: border-box;
 }
+
+/* ------------------------------------------------------------------ 顶栏 */
+/* 高度 = 宿主对话头部高度 - TabBar 高度，使「顶栏+TabBar」底部分割线与
+   宿主头部底边（浅蓝色区域下沿）精确对齐。 */
 #dsh-database-console .db-topbar {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  background: linear-gradient(180deg, #1a2130, #141a26);
-  border: 1px solid var(--db-border);
-  border-radius: var(--db-radius);
-  margin-bottom: 10px;
+  height: calc(var(--db-shell-header-h, 76px) - var(--db-tabbar-h, 32px));
+  min-height: 40px;
+  padding: 0 20px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--db-border);
+  background: transparent;
 }
 #dsh-database-console .db-title {
   font-size: 14px;
@@ -52,32 +91,376 @@
 #dsh-database-console .db-logo {
   width: 22px;
   height: 22px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #4c8dff, #7b61ff);
+  border-radius: 7px;
+  background: var(--db-accent);
+  color: var(--dsw-alias-label-primary-inverted, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
 }
-#dsh-database-console .db-tabs {
+
+/* ------------------------------------------------------------------ 主体 */
+/* 上下结构：顶栏 / (左导航 | 右工作区)。区域间只靠分割线，无 margin、无 gap。 */
+#dsh-database-console .db-app {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
 }
+#dsh-database-console .db-app-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+}
+
+/* ---------- 左侧导航（连接管理 + 对象树）：透明底 + 右侧分割线 ---------- */
+#dsh-database-console .db-nav {
+  flex: 0 0 264px;
+  width: 264px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--db-border);
+  border-radius: 0;
+  padding: 10px 10px 12px;
+}
+#dsh-database-console .db-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+#dsh-database-console .db-nav-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--db-muted);
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#dsh-database-console .db-nav-head button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+#dsh-database-console .db-nav-editor {
+  background: var(--db-panel);
+  border-radius: var(--db-radius);
+}
+#dsh-database-console .db-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+}
+#dsh-database-console .db-conn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+  transition: background var(--db-ease);
+}
+#dsh-database-console .db-conn-row:hover {
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-accent-weak));
+}
+#dsh-database-console .db-conn-row.db-conn-active {
+  background: var(--dsw-alias-interactive-bg-active, var(--db-accent-weak));
+}
+#dsh-database-console .db-conn-caret {
+  flex: 0 0 auto;
+  color: var(--db-muted);
+  font-size: 10px;
+  width: 12px;
+  text-align: center;
+}
+#dsh-database-console .db-conn-name {
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#dsh-database-console .db-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+#dsh-database-console .db-dot-ok {
+  background: var(--db-ok);
+}
+#dsh-database-console .db-dot-bad {
+  background: var(--db-err);
+}
+
+/* 展开的对象树：去掉外框与底色，仅保留缩进 */
+#dsh-database-console .db-tree-host {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 4px 14px;
+  padding: 2px 0 0;
+  border: 0;
+  background: transparent;
+  min-width: 0;
+}
+#dsh-database-console .db-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-hint {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+#dsh-database-console .db-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-row > .db-muted {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+#dsh-database-console .db-tree-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+#dsh-database-console .db-tree-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
+}
+#dsh-database-console .db-tree-table {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--db-text);
+  font-size: 12px;
+  text-align: left;
+  padding: 4px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 0;
+  transition: background var(--db-ease);
+}
+#dsh-database-console .db-tree-table:hover {
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-accent-weak));
+}
+#dsh-database-console .db-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+#dsh-database-console .db-tree-actions button {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+/* ---------- 右侧 Tab 工作区：透明底，TabBar 底部一条分割线 ---------- */
+#dsh-database-console .db-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+#dsh-database-console .db-tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: calc(var(--db-tabbar-h, 32px) - 1px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--db-border);
+  background: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
+}
+#dsh-database-console .db-tabbar > .db-muted {
+  display: flex;
+  align-items: center;
+}
+/* 番茄工作台 pageTabs 同款：文字 Tab + 主题色下划线指示 */
+#dsh-database-console .db-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  height: 100%;
+  max-width: 240px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--db-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  user-select: none;
+  transition: color var(--db-ease);
+}
+#dsh-database-console .db-tab::after {
+  content: '';
+  position: absolute;
+  right: 2px;
+  bottom: -1px;
+  left: 2px;
+  height: 2px;
+  border-radius: 2px;
+  background: transparent;
+}
+#dsh-database-console .db-tab:hover {
+  color: var(--db-text);
+}
+#dsh-database-console .db-tab.db-tab-active {
+  color: var(--db-accent);
+  font-weight: 600;
+}
+#dsh-database-console .db-tab.db-tab-active::after {
+  background: var(--db-accent);
+}
+#dsh-database-console .db-tab-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+#dsh-database-console .db-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+#dsh-database-console .db-tab-close {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  line-height: 14px;
+  text-align: center;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+}
+#dsh-database-console .db-tab-close:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--db-err) 18%, transparent);
+  color: var(--db-err);
+}
+#dsh-database-console .db-tabpanes {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  position: relative;
+}
+#dsh-database-console .db-pane {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  /* 左右内边距为 0：让 ws-head / 卡片的横向分割线通到左导航分割线与右边缘；
+     文字与表格的留白由各内容块自己的 padding 提供。 */
+  padding: 8px 0 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
+}
+#dsh-database-console .db-pane-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* 纵向堆叠的卡片之间用 hairline 分割线代替卡片描边（线上下留呼吸空间） */
+#dsh-database-console .db-pane-stack > .db-card + .db-card {
+  border-top: 1px solid var(--db-border);
+  padding-top: 8px;
+}
+/* 表工作区头部：对象信息 + 子页切换同一行，紧凑，底部一条分割线（通到两边缘） */
+#dsh-database-console .db-ws-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  padding: 2px 8px 10px;
+  border-bottom: 1px solid var(--db-border);
+}
+#dsh-database-console .db-ws-head .db-seg {
+  flex: 0 0 auto;
+}
+#dsh-database-console .db-ws-icon {
+  font-size: 15px;
+}
+#dsh-database-console .db-ws-name {
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#dsh-database-console .db-ws-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ 通用小件 */
+
 #dsh-database-console button {
   font: inherit;
   color: var(--db-text);
-  background: var(--db-panel-2);
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
-  padding: 5px 11px;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--db-border) 72%, transparent);
+  border-radius: 8px;
+  padding: 5px 12px;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background var(--db-ease), border-color var(--db-ease), color var(--db-ease);
 }
 #dsh-database-console button:hover:not(:disabled) {
-  border-color: var(--db-accent);
-  background: var(--db-accent-weak);
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-accent-weak));
+}
+#dsh-database-console button:focus-visible {
+  outline: 2px solid var(--db-accent);
+  outline-offset: 1px;
 }
 #dsh-database-console button:disabled {
   opacity: 0.45;
@@ -85,35 +468,19 @@
 }
 #dsh-database-console button.db-btn-primary {
   background: var(--db-accent);
-  border-color: var(--db-accent);
-  color: #fff;
+  border-color: transparent;
+  color: var(--dsw-alias-label-primary-inverted, #fff);
+  font-weight: 600;
 }
 #dsh-database-console button.db-btn-primary:hover:not(:disabled) {
-  background: #6ba0ff;
-  border-color: #6ba0ff;
+  background: color-mix(in srgb, var(--db-accent) 86%, #fff);
 }
 #dsh-database-console button.db-btn-danger {
   color: var(--db-err);
 }
 #dsh-database-console button.db-btn-ghost {
   background: transparent;
-}
-#dsh-database-console .db-seg {
-  display: inline-flex;
-  background: var(--db-panel);
-  border: 1px solid var(--db-border);
-  border-radius: 8px;
-  padding: 2px;
-}
-#dsh-database-console .db-seg button {
-  border: none;
-  background: transparent;
-  padding: 4px 12px;
-  border-radius: 6px;
-}
-#dsh-database-console .db-seg button.db-active {
-  background: var(--db-accent-weak);
-  color: #9cc0ff;
+  border-color: transparent;
 }
 #dsh-database-console input,
 #dsh-database-console select,
@@ -122,9 +489,10 @@
   color: var(--db-text);
   background: var(--db-panel);
   border: 1px solid var(--db-border);
-  border-radius: 6px;
-  padding: 6px 9px;
+  border-radius: 8px;
+  padding: 6px 10px;
   outline: none;
+  transition: border-color var(--db-ease);
 }
 #dsh-database-console input:focus,
 #dsh-database-console select:focus,
@@ -144,18 +512,22 @@
   display: grid;
   gap: 12px;
 }
+/* 卡片：透明无边框；嵌套卡片（如 AI 生成的 SQL 块）用一层底色区分 */
 #dsh-database-console .db-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 10px 8px;
+}
+#dsh-database-console .db-card .db-card {
   background: var(--db-panel);
-  border: 1px solid var(--db-border);
   border-radius: var(--db-radius);
-  padding: 12px;
 }
 #dsh-database-console .db-card-title {
   font-size: 12px;
   color: var(--db-muted);
-  text-transform: uppercase;
   letter-spacing: 0.4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -163,24 +535,21 @@
 }
 #dsh-database-console .db-banner {
   padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid transparent;
+  border-radius: 8px;
+  border: 0;
   margin: 6px 0;
 }
 #dsh-database-console .db-banner-error {
-  background: rgba(255, 95, 86, 0.1);
-  border-color: rgba(255, 95, 86, 0.35);
-  color: #ff9b94;
+  background: var(--dsw-alias-state-error-secondary, rgba(255, 95, 86, 0.12));
+  color: var(--db-err);
 }
 #dsh-database-console .db-banner-info {
-  background: rgba(76, 141, 255, 0.1);
-  border-color: rgba(76, 141, 255, 0.3);
-  color: #9cc0ff;
+  background: var(--db-accent-weak);
+  color: var(--db-accent);
 }
 #dsh-database-console .db-banner-ok {
-  background: rgba(55, 201, 120, 0.1);
-  border-color: rgba(55, 201, 120, 0.3);
-  color: #7fe3a9;
+  background: var(--dsw-alias-state-success-secondary, rgba(55, 201, 120, 0.12));
+  color: var(--db-ok);
 }
 #dsh-database-console table.db-data {
   width: 100%;
@@ -190,7 +559,7 @@
 }
 #dsh-database-console table.db-data th,
 #dsh-database-console table.db-data td {
-  border: 1px solid var(--db-border);
+  border: 1px solid color-mix(in srgb, var(--db-border) 60%, transparent);
   padding: 5px 9px;
   text-align: left;
   vertical-align: top;
@@ -199,7 +568,7 @@
   white-space: pre-wrap;
 }
 #dsh-database-console table.db-data th {
-  background: var(--db-panel-2);
+  background: var(--db-bg);
   color: var(--db-muted);
   position: sticky;
   top: 0;
@@ -207,16 +576,16 @@
   cursor: default;
 }
 #dsh-database-console table.db-data tbody tr:hover td {
-  background: rgba(76, 141, 255, 0.05);
+  background: color-mix(in srgb, var(--db-accent) 8%, transparent);
 }
 #dsh-database-console .db-scroll {
   overflow: auto;
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--db-border) 60%, transparent);
+  border-radius: 8px;
   max-height: 420px;
 }
 #dsh-database-console .db-null {
-  color: #5b6374;
+  color: var(--db-faint);
   font-style: italic;
 }
 #dsh-database-console .db-mono {
@@ -240,18 +609,20 @@
 #dsh-database-console .db-badge {
   display: inline-block;
   font-size: 11px;
-  border-radius: 10px;
-  padding: 1px 8px;
-  border: 1px solid var(--db-border-strong);
+  line-height: 1.6;
+  border-radius: 999px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--db-border) 80%, transparent);
   color: var(--db-muted);
+  background: transparent;
 }
 #dsh-database-console .db-badge-ok {
   color: var(--db-ok);
-  border-color: rgba(55, 201, 120, 0.4);
+  border-color: color-mix(in srgb, var(--db-ok) 40%, transparent);
 }
 #dsh-database-console .db-badge-type {
-  color: #8fb8ff;
-  border-color: rgba(76, 141, 255, 0.35);
+  color: var(--db-accent);
+  border-color: color-mix(in srgb, var(--db-accent) 36%, transparent);
 }
 #dsh-database-console .db-row {
   display: flex;
@@ -266,24 +637,24 @@
 #dsh-database-console .db-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 #dsh-database-console .db-list-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
-  background: var(--db-panel-2);
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
+  transition: background var(--db-ease);
 }
 #dsh-database-console .db-list-item:hover {
-  border-color: var(--db-accent);
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-accent-weak));
 }
 #dsh-database-console .db-list-item.db-active {
-  border-color: var(--db-accent);
-  background: var(--db-accent-weak);
+  background: var(--dsw-alias-interactive-bg-active, var(--db-accent-weak));
 }
 #dsh-database-console .db-chip {
   font-family: var(--db-mono);
@@ -317,6 +688,32 @@
   color: var(--db-muted);
   font-size: 12px;
   padding: 6px 0;
+}
+/* 分段选择器（数据浏览 / SQL / 自然语言） */
+#dsh-database-console .db-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--db-panel);
+  border: 1px solid color-mix(in srgb, var(--db-border) 72%, transparent);
+  border-radius: 999px;
+  padding: 2px;
+}
+#dsh-database-console .db-seg button {
+  border: 0;
+  background: transparent;
+  padding: 3px 11px;
+  border-radius: 999px;
+  color: var(--db-muted);
+}
+#dsh-database-console .db-seg button:hover {
+  color: var(--db-text);
+  background: transparent;
+}
+#dsh-database-console .db-seg button.db-active {
+  background: var(--db-accent-weak);
+  color: var(--db-accent);
+  font-weight: 600;
 }
 
 /* ===== DSH shell 集成：侧边栏入口 ===== */
@@ -388,7 +785,7 @@ button.db-sidebar-entry svg {
   position: fixed;
   inset: 0;
   z-index: 2147483001;
-  background: var(--db-bg, #0e1116);
+  background: var(--db-bg, #12141a);
   overflow: auto;
 }
 
@@ -397,30 +794,36 @@ button.db-sidebar-entry svg {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  height: 26px;
+  padding: 0 8px;
+  margin-bottom: 0;
   font: inherit;
   color: inherit;
-  border-radius: 6px;
+  border: 0;
+  border-radius: 8px;
+  transition: background var(--db-ease);
 }
 #dsh-database-console .db-structure-toggle:hover {
-  background: var(--db-panel-2);
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-panel-2));
 }
-/* 双表网格：表头固定在外层不参与竖向滚动；表体独立滚动；共用同一组列宽 */
+/* 双表网格：表头固定在外层不参与竖向滚动；表体独立滚动；共用同一组列宽。
+   网格外框去掉，仅靠表线与表头底部分割线界定。 */
 #dsh-database-console .db-gridx {
   flex: 1 1 auto;
   min-width: 0;
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
+  border: 0;
+  border-radius: 0;
 }
 #dsh-database-console .db-gridx-head {
   overflow: hidden;
-  background: var(--db-panel-2);
+  background: var(--db-bg);
   border-bottom: 1px solid var(--db-border-strong);
-  border-radius: 6px 6px 0 0;
 }
 #dsh-database-console .db-gridx-body {
   overflow: auto;
   max-height: 460px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
 }
 #dsh-database-console table.db-gridx-t {
   table-layout: fixed;
@@ -438,7 +841,7 @@ button.db-sidebar-entry svg {
   user-select: none;
   padding: 0;
   min-height: 28px;
-  border-right: 1px solid var(--db-border);
+  border-right: 1px solid color-mix(in srgb, var(--db-border) 55%, transparent);
   vertical-align: top;
 }
 #dsh-database-console table.db-gridx-t thead th .db-gridx-th {
@@ -492,7 +895,7 @@ button.db-sidebar-entry svg {
   height: 15px;
   line-height: 15px;
   text-align: center;
-  border-radius: 3px;
+  border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   opacity: 0.55;
@@ -515,11 +918,14 @@ button.db-sidebar-entry svg {
   margin: 0 4px 4px 5px;
   padding: 2px 6px;
   font-size: 11px;
-  border: 1px solid var(--db-accent);
-  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--db-accent) 55%, transparent);
+  border-radius: 5px;
   background: var(--db-panel);
   color: inherit;
   outline: none;
+}
+#dsh-database-console .db-gridx-filter:focus {
+  border-color: var(--db-accent);
 }
 #dsh-database-console table.db-gridx-t thead th .db-colresize {
   position: absolute;
@@ -532,21 +938,22 @@ button.db-sidebar-entry svg {
   z-index: 5;
 }
 #dsh-database-console table.db-gridx-t td.db-cell {
-  border-bottom: 1px solid var(--db-border);
-  border-right: 1px solid var(--db-border);
+  border-bottom: 1px solid color-mix(in srgb, var(--db-border) 45%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--db-border) 45%, transparent);
   padding: 4px 9px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
   color: inherit;
+  transition: background var(--db-ease);
 }
 #dsh-database-console table.db-gridx-t td.db-cell:hover {
-  background: var(--db-accent-weak);
+  background: color-mix(in srgb, var(--db-accent) 8%, transparent);
 }
 #dsh-database-console table.db-gridx-t td.db-cell-active,
 #dsh-database-console table.db-gridx-t td.db-cell-active:hover {
-  background: rgba(76, 141, 255, 0.22);
+  background: color-mix(in srgb, var(--db-accent) 18%, transparent);
   box-shadow: inset 0 0 0 1px var(--db-accent);
 }
 #dsh-database-console .db-celldetail {
@@ -555,10 +962,13 @@ button.db-sidebar-entry svg {
   max-width: 38%;
   min-width: 260px;
   padding: 10px 12px;
+  border: 0;
   border-left: 1px solid var(--db-border);
-  background: var(--db-panel-2);
+  background: var(--db-panel);
   overflow: auto;
   max-height: 560px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
 }
 #dsh-database-console .db-celldetail-title {
   display: flex;
@@ -580,8 +990,8 @@ button.db-sidebar-entry svg {
   font-size: 12px;
   color: var(--db-accent);
   background: none;
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--db-border) 72%, transparent);
+  border-radius: 8px;
   padding: 5px 8px;
   margin-top: 8px;
   cursor: pointer;
@@ -589,7 +999,7 @@ button.db-sidebar-entry svg {
   gap: 4px;
 }
 #dsh-database-console .db-row-toggle:hover {
-  border-color: var(--db-accent);
+  border-color: color-mix(in srgb, var(--db-accent) 55%, transparent);
   background: var(--db-accent-weak);
 }
 #dsh-database-console .db-celldetail-row {
@@ -600,310 +1010,9 @@ button.db-sidebar-entry svg {
   overflow-wrap: anywhere;
   margin-top: 6px;
   padding: 6px;
-  border: 1px solid var(--db-border);
-  border-radius: 6px;
-  background: var(--db-panel);
-}
-
-/* ===== 新布局：左侧导航 + 右侧多 Tab 工作区 ===== */
-
-#dsh-database-console .db-app {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-}
-#dsh-database-console .db-topbar {
-  margin: 10px 12px 0;
-}
-#dsh-database-console .db-app-body {
-  display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  gap: 10px;
-  padding: 10px 12px 12px;
-}
-
-/* ---------- 左侧导航（连接管理 + 对象树） ---------- */
-#dsh-database-console .db-nav {
-  flex: 0 0 268px;
-  width: 268px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  overflow-y: auto;
-  background: var(--db-panel);
-  border: 1px solid var(--db-border);
-  border-radius: var(--db-radius);
-  padding: 10px;
-}
-#dsh-database-console .db-nav-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-#dsh-database-console .db-nav-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--db-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#dsh-database-console .db-nav-head button {
-  padding: 3px 8px;
-  font-size: 12px;
-}
-#dsh-database-console .db-nav-editor {
-  background: var(--db-panel-2);
-  border-color: var(--db-accent);
-}
-#dsh-database-console .db-nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-}
-#dsh-database-console .db-conn-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  user-select: none;
-  min-width: 0;
-}
-#dsh-database-console .db-conn-row:hover {
-  background: var(--db-accent-weak);
-  border-color: rgba(76, 141, 255, 0.35);
-}
-#dsh-database-console .db-conn-row.db-conn-active {
-  background: var(--db-accent-weak);
-  border-color: var(--db-accent);
-}
-#dsh-database-console .db-conn-caret {
-  flex: 0 0 auto;
-  color: var(--db-muted);
-  font-size: 10px;
-  width: 12px;
-  text-align: center;
-}
-#dsh-database-console .db-conn-name {
-  font-weight: 600;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-#dsh-database-console .db-dot {
-  flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-}
-#dsh-database-console .db-dot-ok {
-  background: var(--db-ok);
-}
-#dsh-database-console .db-dot-bad {
-  background: var(--db-err);
-}
-
-#dsh-database-console .db-tree-host {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 4px 14px;
-  padding: 8px;
-  border: 1px solid var(--db-border);
+  border: 1px solid color-mix(in srgb, var(--db-border) 60%, transparent);
   border-radius: 8px;
   background: var(--db-bg);
-  min-width: 0;
-}
-#dsh-database-console .db-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-#dsh-database-console .db-tree-hint {
-  font-size: 11px;
-  padding: 2px 4px;
-}
-#dsh-database-console .db-tree-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-#dsh-database-console .db-tree-row > .db-muted {
-  flex: 0 0 auto;
-  font-size: 11px;
-}
-#dsh-database-console .db-tree-row select {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 12px;
-  padding: 3px 6px;
-}
-#dsh-database-console .db-tree-tables {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  max-height: 320px;
-  overflow-y: auto;
-}
-#dsh-database-console .db-tree-table {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--db-text);
-  font-size: 12px;
-  text-align: left;
-  padding: 3px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  min-width: 0;
-}
-#dsh-database-console .db-tree-table:hover {
-  background: var(--db-accent-weak);
-  border-color: rgba(76, 141, 255, 0.4);
-}
-#dsh-database-console .db-tree-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-#dsh-database-console .db-tree-actions button {
-  font-size: 12px;
-  padding: 3px 8px;
-}
-
-/* ---------- 右侧 Tab 工作区 ---------- */
-#dsh-database-console .db-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--db-panel);
-  border: 1px solid var(--db-border);
-  border-radius: var(--db-radius);
-  overflow: hidden;
-}
-#dsh-database-console .db-tabbar {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 4px 6px 0;
-  border-bottom: 1px solid var(--db-border);
-  background: rgba(0, 0, 0, 0.12);
-  scrollbar-width: thin;
-}
-#dsh-database-console .db-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: 0 0 auto;
-  max-width: 240px;
-  min-width: 0;
-  padding: 6px 6px 6px 10px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  cursor: pointer;
-  color: var(--db-muted);
-  font-size: 12.5px;
-  white-space: nowrap;
-  user-select: none;
-}
-#dsh-database-console .db-tab:hover {
-  background: rgba(76, 141, 255, 0.1);
-  color: var(--db-text);
-}
-#dsh-database-console .db-tab.db-tab-active {
-  background: var(--db-panel-2);
-  border-color: var(--db-border);
-  color: var(--db-text);
-  box-shadow: inset 0 1px 0 var(--db-accent);
-}
-#dsh-database-console .db-tab-icon {
-  flex: 0 0 auto;
-  font-size: 12px;
-}
-#dsh-database-console .db-tab-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-#dsh-database-console .db-tab-close {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  line-height: 14px;
-  text-align: center;
-  border-radius: 4px;
-  font-size: 11px;
-  opacity: 0.55;
-}
-#dsh-database-console .db-tab-close:hover {
-  opacity: 1;
-  background: rgba(255, 95, 86, 0.2);
-  color: var(--db-err);
-}
-#dsh-database-console .db-tabpanes {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  position: relative;
-}
-#dsh-database-console .db-pane {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  padding: 10px 12px 24px;
-}
-#dsh-database-console .db-pane-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-#dsh-database-console .db-ws-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  min-width: 0;
-}
-#dsh-database-console .db-ws-icon {
-  font-size: 15px;
-}
-#dsh-database-console .db-ws-name {
-  font-size: 14px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 窄屏时给数据浏览网格更高的可视区（Tab 内滚动时保留页脚） */
@@ -914,33 +1023,30 @@ button.db-sidebar-entry svg {
 /* ===== 自适应页面宽度 =====
  * 面板宽度 = DSH 中栏宽度（由 db-console-overlay.tsx 跟踪两列得出），不等于视口
  * 宽度，所以用 container query（以面板自身为容器）而不是 media query 做内容级
- * 自适应：中栏被左右侧栏挤压时逐步收紧内边距与左导航宽度，保证工作区可用。
- * 不支持 container query 的浏览器会整段忽略，回落到固定 268px 导航（渐进增强）。 */
+ * 自适应：中栏被左右侧栏挤压时收紧内边距与左导航宽度，保证工作区可用。
+ * 不支持 container query 的浏览器会整段忽略，回落到固定 264px 导航（渐进增强）。 */
 #dsh-database-console {
   container-type: inline-size;
 }
 
 @container (max-width: 960px) {
   #dsh-database-console .db-topbar {
-    margin: 8px 10px 0;
-  }
-  #dsh-database-console .db-app-body {
-    gap: 8px;
-    padding: 8px 10px 10px;
+    padding: 0 14px;
   }
   #dsh-database-console .db-nav {
     flex-basis: 228px;
     width: 228px;
+    padding: 8px 8px 10px;
   }
 }
 
 @container (max-width: 780px) {
   #dsh-database-console .db-nav {
-    flex-basis: 192px;
-    width: 192px;
-    padding: 8px;
+    flex-basis: 188px;
+    width: 188px;
+    padding: 8px 6px 10px;
   }
   #dsh-database-console .db-pane {
-    padding: 8px 10px 20px;
+    padding: 8px 0 16px;
   }
 }

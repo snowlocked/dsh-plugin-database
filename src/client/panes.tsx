@@ -161,7 +161,7 @@ function BrowseView({ connection, target }: { connection: ConnectionView; target
           {busy ? <span className="db-muted">{busy}</span> : columns.length === 0 ? <span className="db-muted">（读取失败或无字段）</span> : null}
         </button>
         {showStructure && (
-          <div style={{ padding: '6px 10px 10px', borderTop: '1px solid var(--db-border, rgba(128,128,128,.25))' }}>
+          <div style={{ padding: '2px 8px 6px', borderTop: '1px solid var(--db-border, rgba(128,128,128,.25))' }}>
             {columns.length === 0
               ? <div className="db-empty">{error ? '（读取失败）' : '（无字段）'}</div>
               : <div className="db-list">
@@ -179,13 +179,13 @@ function BrowseView({ connection, target }: { connection: ConnectionView; target
       </div>
 
       <div className="db-card" style={{ padding: 0 }}>
-        <div className="db-card-title" style={{ padding: '10px 12px 0' }}>
+        <div className="db-card-title" style={{ padding: '8px 8px 0' }}>
           <span>🔍 数据预览</span>
           {rows
             ? <span className="db-muted">{rows.total !== undefined ? `共 ${rows.total} 行 · 本页 ${rows.rowCount}` : `${rows.rowCount} 行 · 偏移 ${offset}`}</span>
             : null}
         </div>
-        <div style={{ padding: '0 12px' }}>
+        <div style={{ padding: '0 6px' }}>
           <Banner kind="error" text={error} />
           {cellMsg && <Banner kind={cellMsg.kind === 'ok' ? 'ok' : 'error'} text={cellMsg.text} />}
           {busy && <div className="db-muted" style={{ padding: '6px 0' }}>{busy}</div>}
@@ -445,7 +445,7 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
           ))}
         </select>
         {models && !models.ok
-          ? <span className="db-badge" style={{ color: 'var(--db-err)', borderColor: 'rgba(255,95,86,.4)' }}>{models.message ?? '模型服务不可用'}</span>
+          ? <span className="db-badge" style={{ color: 'var(--db-err)', borderColor: 'color-mix(in srgb, var(--db-err) 40%, transparent)' }}>{models.message ?? '模型服务不可用'}</span>
           : null}
         {models === null ? <span className="db-muted">（读取 DSH 模型列表中…）</span> : null}
       </div>
@@ -515,26 +515,26 @@ export function TableWorkspace({
 
   return (
     <div className="db-pane-stack">
-      <div className="db-card db-ws-meta">
+      <div className="db-ws-head">
         <span className="db-ws-icon">{KIND_ICON[table.kind] ?? '🗂'}</span>
         <strong className="db-ws-name">{table.name}</strong>
         <span className="db-badge db-badge-type">{KIND_LABEL[table.kind] ?? table.kind}</span>
         {database ? <span className="db-badge">库：{database}</span> : null}
         {schema && aware ? <span className="db-badge">schema：{schema}</span> : null}
         <span className="db-badge">{TYPE_LABELS[connection.type]}</span>
-        <span className="db-muted db-grow" style={{ textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{connection.name}</span>
-      </div>
-
-      <div className="db-seg db-ws-seg" role="tablist" aria-label="工作区子页">
-        <button role="tab" aria-selected={sub === 'browse'} className={sub === 'browse' ? 'db-active' : ''} onClick={() => choose('browse')}>
-          📚 数据浏览
-        </button>
-        <button role="tab" aria-selected={sub === 'sql'} className={sub === 'sql' ? 'db-active' : ''} onClick={() => choose('sql')}>
-          ⌨️ SQL 查询
-        </button>
-        <button role="tab" aria-selected={sub === 'nl'} className={sub === 'nl' ? 'db-active' : ''} onClick={() => choose('nl')}>
-          💬 自然语言查询
-        </button>
+        <span className="db-muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{connection.name}</span>
+        <div className="db-grow" />
+        <div className="db-seg" role="tablist" aria-label="工作区子页">
+          <button role="tab" aria-selected={sub === 'browse'} className={sub === 'browse' ? 'db-active' : ''} onClick={() => choose('browse')}>
+            📚 数据浏览
+          </button>
+          <button role="tab" aria-selected={sub === 'sql'} className={sub === 'sql' ? 'db-active' : ''} onClick={() => choose('sql')}>
+            ⌨️ SQL 查询
+          </button>
+          <button role="tab" aria-selected={sub === 'nl'} className={sub === 'nl' ? 'db-active' : ''} onClick={() => choose('nl')}>
+            💬 自然语言查询
+          </button>
+        </div>
       </div>
 
       <div className="db-ws-pages">
