@@ -1,140 +1,123 @@
 /**
- * `database.console` slot 注册组件 —— 工作台面板。
+ * `conversation.view` slot 注册组件 —— 工作台面板。
  *
  * 渲染 <App/>（含左侧连接导航 + 右侧多 Tab 工作区）。
  *
- * ⚠️ 必须保留 `<div id="dsh-database-console">` 这层 wrapper：styles.css 里所有
- * 选择器都以 `#dsh-database-console` 为根限定（`#dsh-database-console .db-topbar {…}`、
- * `#dsh-database-console * {…}`），没这个 id 整个主题样式全失效。
+ * 持久挂载策略（为什么不用普通渲染）：
+ *   Conversation 切换 View 时会 **卸载** 非激活 View（renderSlot(..., { only: active.id })），
+ *   如果把 App 直接渲染在本组件里，每次切到 Chat 再切回来，所有已打开的工作区
+ *   Tab、SQL 文本、浏览状态都会丢失。因此 App 只通过 createRoot 挂载 **一次**
+ *   到模块级持久容器（#dsh-database-console），本组件在激活时把容器 appendChild
+ *   到停靠位、失活/卸载时移回 body 并 display:none —— App 及其全部状态跨
+ *   View 切换、跨会话切换、跨“关闭再打开”始终保留。
  *
- * 几何策略（自适应页面宽度，参考 dsh-plugins-team-board 番茄工作台的中栏接管思路）：
- * shell.overlay 父节点是 `position: absolute; inset: 0` 覆盖整个 frame（含左右侧栏）。
- * DSH 是三栏 layout —— sidebar | center | details（右侧详情栏可展开/收起/拖宽）。
- * 本组件持续跟踪两列的真实宽度，让面板始终正好盖在 **中栏** 上：
- *   - `[class*="sidebarCol"]`  —— 左侧栏宽度 → left（折叠/窄屏 rail/拖宽都跟随）
- *   - `[class*="detailsCol"]`  —— 右侧详情栏宽度 → right
- * 与旧版「挂载时一次性 querySelector」不同，列节点失联（layout 重挂载、热更新、
- * class hash 变化）时会自动重新解析并重新观察；frame 尺寸与窗口 resize 也触发重测，
- * 因此任意页面宽度下面板都贴合中栏。找不到列节点（如独立预览）时左右均为 0，
- * 面板铺满可用宽度。
+ * 中栏接管（参考番茄工作台）：
+ *   激活时把持久容器 **以绝对定位覆盖** 到 Conversation 根节点（[data-phase]，
+ *   position:relative）上 —— inset:0 + 不透明背景，天然盖住会话头部、View 导航
+ *   与悬浮输入框，工作台自带顶栏取而代之。**不隐藏、不修改任何宿主元素**：
+ *   覆盖层没出现的最坏结果是 chat 照常显示，绝不会白屏；失活时容器移回 body，
+ *   宿主恢复如初。
  *
- * 点击外部自动关闭（同番茄工作台的 closeOnOutsideNavigation）：面板打开时在
- * document 捕获阶段监听 pointerdown，点在面板外（左侧栏其它插件按钮、右侧详情栏、
- * shell 自身控件）即收起工作台。以下目标不触发关闭：
- *   - 面板内部（root.contains）；
- *   - portal 弹层：[role="dialog"] / [role="menu"] / [role="listbox"]；
- *   - 本插件自己的侧边栏入口按钮（[data-d-sh-plugin="database"]）—— 它自带
- *     toggle 语义，若在这里先 close，随后的 click toggle 会把面板重新打开。
- *
- * 显隐语义（配合 index.tsx 的 shell.overlay host）：
- *   - `hidden` 为 true 时只做 display:none —— App 保持挂载，关闭面板再打开时
- *     所有 Tab / 子视图 / SQL 文本等状态原样保留（不再“每次都重置”）。
- *   - 从未打开过且非 standalone 时由 host 直接不渲染本组件。
+ * ⚠️ 持久容器必须携带 `id="dsh-database-console"`：styles.css 里所有选择器都以
+ * 它为根限定（`#dsh-database-console .db-topbar {…}`），容器走到哪里主题样式
+ * 就跟到哪里。
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
+import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
-import type { DatabaseConsoleOwnerProps } from './contract/slots.d.ts'
+import { controller, usePanelSnapshot } from './controller.ts'
 
-/** 左右两栏的实测宽度；找不到列节点时按 0 处理（面板铺满可用宽度）。 */
-interface ColumnTrack { left: number; right: number }
+/* ------------------------------------------- 持久 App root（跨 View 卸载保活） */
 
-export function DatabaseConsoleOverlay(props: DatabaseConsoleOwnerProps): JSX.Element | null {
-  const [track, setTrack] = useState<ColumnTrack>({ left: 0, right: 0 })
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  // 宿主每次渲染都会新建 onClose；放进 latest-ref 让两个 effect 的依赖保持稳定。
-  const onCloseRef = useRef(props.onClose)
-  onCloseRef.current = props.onClose
-  const visible = !props.hidden
+type HostMode = 'dsh' | 'standalone'
 
-  // ---- 几何跟踪：面板始终贴合中栏（左让开 sidebarCol，右让开 detailsCol）----
-  useLayoutEffect(() => {
-    if (typeof document === 'undefined') return
-    let sidebarCol: HTMLElement | null = null
-    let detailsCol: HTMLElement | null = null
-    let raf = 0
+let host: HTMLDivElement | null = null
+let reactRoot: ReturnType<typeof createRoot> | null = null
 
-    const schedule = (): void => {
-      if (raf !== 0) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        measure()
-      })
+/** 独立预览模式：订阅 controller 决定浮层显隐，App 本身保持挂载。 */
+function StandaloneGate(): JSX.Element {
+  const snapshot = usePanelSnapshot()
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
+        display: snapshot.panelOpen ? 'flex' : 'none',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <App onClose={() => controller.close()} standalone />
+    </div>
+  )
+}
+
+/**
+ * 确保（全局唯一的）持久 App 容器已创建。容器自带 `id="dsh-database-console"`
+ * （styles.css 的作用域根）。DSH 模式：绝对定位覆盖层，停靠时铺满 Conversation
+ * 根节点；独立预览模式：fixed 浮层。二者宿主环境互斥，以先创建者为准。
+ */
+function ensureHost(mode: HostMode): HTMLDivElement {
+  if (host !== null) return host
+  host = document.createElement('div')
+  host.id = 'dsh-database-console'
+  host.style.cssText = mode === 'standalone'
+    ? [
+        'position:fixed', 'left:24px', 'right:24px', 'top:24px', 'bottom:24px',
+        'z-index:2147482000', 'border-radius:12px',
+        'box-shadow:0 18px 48px rgba(0,0,0,.45)', 'overflow:hidden',
+        'display:flex', 'flex-direction:column', 'background:var(--db-bg)',
+      ].join(';')
+    : [
+        'position:absolute', 'inset:0', 'z-index:30', 'display:none',
+        'flex-direction:column', 'overflow:hidden', 'background:var(--db-bg)',
+      ].join(';')
+  document.body.appendChild(host)
+  reactRoot = createRoot(host)
+  reactRoot.render(
+    mode === 'standalone'
+      ? <StandaloneGate />
+      : <App onClose={() => controller.close()} standalone={false} />,
+  )
+  return host
+}
+
+/** 独立预览入口（无 DSH slots 时由 index.tsx 调用）：挂起持久浮层。 */
+export function mountStandaloneConsole(): void {
+  if (typeof document === 'undefined') return
+  ensureHost('standalone')
+}
+
+/* ------------------------------------------------- conversation.view 组件 */
+
+export function DatabaseConsoleOverlay(_props: Record<string, unknown>): JSX.Element {
+  // 锚点：只用来向上找 Conversation 根节点（[data-phase]），本身不占空间。
+  const anchorRef = useRef<HTMLDivElement | null>(null)
+
+  // 激活时把持久容器覆盖到 Conversation 根节点上；失活/卸载时移回 body 并隐藏。
+  // 全程不修改任何宿主元素 —— 最坏情况是覆盖层缺席，chat 保持可见。
+  useEffect(() => {
+    const anchor = anchorRef.current
+    if (anchor === null) return undefined
+    const persistentHost = ensureHost('dsh')
+    // [data-phase] 是 ConversationRoot 根节点（position:relative），覆盖它即
+    // 连头部一起接管；找不到时退化停靠到父容器，仍不影响宿主。
+    const dock = anchor.closest<HTMLElement>('[data-phase]') ?? anchor.parentElement
+    if (dock !== null && dock !== undefined) {
+      controller.setDocked(true)
+      persistentHost.style.display = 'flex'
+      if (persistentHost.parentElement !== dock) dock.appendChild(persistentHost)
     }
-
-    // 列节点失联（layout 重挂载/热更新/class hash 变化）时重新解析并重新观察。
-    const resolveColumns = (): void => {
-      if (sidebarCol === null || !sidebarCol.isConnected) {
-        sidebarCol = document.querySelector<HTMLElement>('[class*="sidebarCol"]')
-        if (sidebarCol !== null) ro.observe(sidebarCol)
-      }
-      if (detailsCol === null || !detailsCol.isConnected) {
-        detailsCol = document.querySelector<HTMLElement>('[class*="detailsCol"]')
-        if (detailsCol !== null) ro.observe(detailsCol)
-      }
-    }
-
-    const measure = (): void => {
-      resolveColumns()
-      const left = sidebarCol !== null ? sidebarCol.getBoundingClientRect().width : 0
-      const right = detailsCol !== null ? detailsCol.getBoundingClientRect().width : 0
-      setTrack((previous) => (
-        Math.abs(previous.left - left) < 0.5 && Math.abs(previous.right - right) < 0.5
-          ? previous // 无实际变化不触发重渲染（拖拽期间 RO 回调很密）
-          : { left: Math.max(0, left), right: Math.max(0, right) }
-      ))
-    }
-
-    const ro = new ResizeObserver(schedule)
-    measure()
-    // 帧根（grid frame）尺寸变化（窗口缩放、滚动条出现等）也要重测：
-    // 列节点被整体替换时 ResizeObserver 自己不会发现，这里顺带完成重新解析。
-    const frame = rootRef.current?.closest<HTMLElement>('[class*="frame"]')
-      ?? rootRef.current?.parentElement
-    if (frame !== null && frame !== undefined) ro.observe(frame)
-    // 保险：个别环境下 frame RO 可能不触发（如宿主非窗口铺满），再挂一层窗口监听。
-    window.addEventListener('resize', schedule)
     return () => {
-      window.removeEventListener('resize', schedule)
-      ro.disconnect()
-      if (raf !== 0) cancelAnimationFrame(raf)
+      controller.setDocked(false)
+      if (persistentHost.parentElement !== document.body) {
+        document.body.appendChild(persistentHost)
+      }
+      persistentHost.style.display = 'none'
     }
   }, [])
 
-  // ---- 点击面板外自动关闭（左侧菜单其它插件按钮、右栏、shell 控件等）----
-  useEffect(() => {
-    if (!visible || props.standalone) return
-    const onPointerDown = (event: PointerEvent): void => {
-      if (!(event.target instanceof Element)) return
-      const root = rootRef.current
-      if (root === null) return
-      if (root.contains(event.target)) return
-      if (event.target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return
-      if (event.target.closest('[data-d-sh-plugin="database"]')) return
-      onCloseRef.current()
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => document.removeEventListener('pointerdown', onPointerDown, true)
-  }, [visible, props.standalone])
-
-  return (
-    <div
-      id="dsh-database-console"
-      ref={rootRef}
-      data-hidden={props.hidden ? 'true' : undefined}
-      style={{
-        position: 'absolute',
-        left: Math.max(0, Math.round(track.left)),
-        top: 0,
-        right: Math.max(0, Math.round(track.right)),
-        bottom: 0,
-        background: 'var(--db-bg)',
-        display: props.hidden ? 'none' : 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        zIndex: 1,
-      }}
-    >
-      <App onClose={props.onClose} standalone={props.standalone} />
-    </div>
-  )
+  return <div ref={anchorRef} style={{ height: 0, overflow: 'hidden' }} />
 }

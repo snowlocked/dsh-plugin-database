@@ -5,13 +5,10 @@
 - 客户端 bundle 以 `window.__ModuleLoader__.load({ id, factory: (require) => {...} })` 注册；
   React/ReactDOM 留作 external，bundle 通过 `require('react')` 拿到 host 静态模块
   里的 React 实例（dispatcher 与主机一致，不会触发 "useSyncExternalStore null deref"）。
-- `apply(ctx)` 通过 `ctx.slots.inject/register` 挂三条 slot：
+- `apply(ctx)` 通过 `ctx.slots.inject/register` 挂两类 slot：
   - **`sidebar.footer.action`** list slot 新增 entry `id=database, order=-10`（底部「数据库」入口按钮）；
-  - **`database.console`** 自定义 single root slot `id=dsh`（含子 slot `database.console.toolbar`）；
-  - **`shell.overlay`** list slot 注册 host `id=database.console`，host 内部
-    `props.renderSlot('database.console', owner)` 把工作台嵌入 layout 已声明的
-    frame-wide 浮层。host 用 ResizeObserver 跟 sidebar 宽度，wrapper 定位到
-    `left: <sidebarWidth>`，避免遮住侧栏。
+  - **`conversation.view`** list/session slot 注册工作台 View `id=database`，与 Chat/Trajectory
+    并列渲染在 Conversation 内容区域内，不再使用 `shell.overlay`。
 - 无 `__ModuleLoader__` 的普通页面打开同一 bundle 会退化为独立预览（右下角悬浮按钮）。
 
 ## 一、准备插件包

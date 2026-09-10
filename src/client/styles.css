@@ -16,6 +16,10 @@
   --db-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
 }
 
+/* 中栏接管说明：工作台打开时由 db-console-overlay 把持久容器（#dsh-database-console）
+   以 absolute inset:0 覆盖到 Conversation 根节点上（参考番茄工作台），不隐藏、
+   不修改任何宿主元素，因此这里没有任何针对宿主（头部/composer）的规则。 */
+
 #dsh-database-console {
   --bg: var(--db-bg);
   color: var(--db-text);
@@ -315,27 +319,15 @@
   padding: 6px 0;
 }
 
-/* ===== DSH shell 集成：中栏接管 + 侧边栏入口 ===== */
+/* ===== DSH shell 集成：侧边栏入口 ===== */
+/* （旧属性开关时代的中栏接管规则已删除：[data-dsh-database-view] 一类属性
+   presence 选择器会误伤宿主节点 —— 0.4.5 白屏事故根因；新方案由
+   db-console-overlay 直接把 #dsh-database-console 容器覆盖到 Conversation
+   根节点上，不依赖任何属性开关。） */
 
 [data-pane='conversation'],
 [class*='centerCol'] {
   position: relative;
-}
-
-[data-dsh-database-view] {
-  position: absolute;
-  inset: 0;
-  display: none;
-  z-index: 60;
-  background: var(--db-bg, #0e1116);
-  overflow: auto;
-}
-html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [data-dsh-database-view] {
-  display: block;
-}
-html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [data-pane='conversation'] > :not([data-dsh-database-view]),
-html[data-dsh-database-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) [class*='centerCol'] > :not([data-dsh-database-view]) {
-  display: none !important;
 }
 
 /* DSH footerActions 容器默认是 `display: flex; flex-wrap: nowrap`，所有

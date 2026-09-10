@@ -173,10 +173,13 @@ cd ~/.dsh/profiles/web && pnpm install
 
 Web 端集成走 DSH slot 模型，与内置插件同构：
 
-- `apply` 通过 `ctx.slots.inject/register` 挂三条 slot：
-  - **`sidebar.footer.action`** list slot 新增一个 entry（id=`database`，order=-10），渲染底部入口按钮
-  - **`database.console`** 自定义 single root slot（id=`dsh`，含子 slot `database.console.toolbar`）
-  - **`shell.overlay`** list slot 注册 host（id=`database.console`），host 内部 `props.renderSlot('database.console', owner)` 嵌入工作台
+- `apply` 通过 `ctx.slots.inject/register` 挂两条 slot：
+  - **`sidebar.footer.action`** list slot 新增一个 entry（id=`database`，order=-10），渲染底部入口按钮（往返开关）
+  - **`conversation.view`** list/session slot 注册工作台 View（id=`database`，与 Chat/Trajectory 并列渲染）
+- 工作台打开时接管整个中栏（参考番茄工作台）：持久容器以 `absolute inset:0` 覆盖
+  到 Conversation 根节点上，自带顶栏替代会话头部；**不隐藏、不修改任何宿主元素**
+  （覆盖缺席的最坏结果是 chat 照常显示，不会白屏）。App 通过持久 React root 挂载
+  一次，View 切换 / 会话切换 / 关闭再打开均保留已开 Tab 与查询状态
 - bundle 的 factory 接收 DSH loader 给的 `require`，**React/ReactDOM 走 host 静态模块**（不做内联），保证 dispatcher 与 host 一致、避免 `useSyncExternalStore` 跨实例 `de.current` 为 null
 - bundle 在 DSH 外环境（普通页面）打开时退化为右下角悬浮独立预览
 

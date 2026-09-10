@@ -7,58 +7,21 @@
  * 我们的 apply 负责通过 ctx.slots + ctx.locale 把插件挂进 DSH 自己的渲染树：
  *
  *   1) `sidebar.footer.action`  list slot   —— 数据库工作台的入口按钮
- *   2) `database.console`       single root  —— 工作台主面板（自定义 slot）
- *   3) `shell.overlay`          list root    —— 把 `database.console` 嵌进 layout
- *                                                声明的 frame-wide 浮层
+ *   2) `conversation.view`       list/session —— 把工作台作为 Conversation 的一个 View
  *
  * React/ReactDOM 留作 external —— 见 build.mjs 的 `external: [...]`。这让
  * esbuild 不会把第二份 React 整包内联进来；组件的 hooks 走的是 DSH 主机的那份
  * React dispatcher，不会再抛 "Cannot read properties of null (reading
  * 'useSyncExternalStore')"。
  */
-import { useEffect, useRef } from 'react'
 import { DatabaseSidebarEntry } from './db-sidebar-entry.tsx'
-import { DatabaseConsoleOverlay } from './db-console-overlay.tsx'
+import { DatabaseConsoleOverlay, mountStandaloneConsole } from './db-console-overlay.tsx'
 import { ensureThemeStyle } from './theme.ts'
-import { controller, usePanelSnapshot } from './controller.ts'
+import { controller } from './controller.ts'
 import { zh, en, NS } from './locales.ts'
-import type { DatabaseConsoleOwnerProps } from './contract/slots.d.ts'
 import cssText from './styles.css'
 
 export const inject: string[] = ['slots', 'locale']
-
-/* ------------------------------------------- shell.overlay 宿主组件 */
-
-/**
- * shell.overlay 列表槽位的 entry。layout 的 <ShellOverlayOutlet/> 替我们把这个组件
- * 渲染进 frame-wide portal，框架通过 props.renderSlot 注入子 slot 渲染器。
- * 我们负责声明并渲染 `database.console` 这个 single root slot。
- *
- * 首次打开后保持挂载（host 不再卸载子 slot）：关闭面板时把 `hidden` 透传给
- * DatabaseConsoleOverlay（display:none），App 及其全部 Tab 状态因此跨“关闭再打开”
- * 保留；这对“每次打开数据库弹出内容需保持上次状态”至关重要。
- */
-interface ShellOverlayHostProps {
-  renderSlot: (key: 'database.console', owner: DatabaseConsoleOwnerProps) => JSX.Element | null
-  /** 是否处于独立预览模式（独立预览时也走这里）。 */
-  standalone?: boolean
-}
-
-function DatabaseShellOverlayHost({ renderSlot, standalone = false }: ShellOverlayHostProps): JSX.Element | null {
-  const snapshot = usePanelSnapshot()
-  const everOpened = useRef(false)
-  useEffect(() => {
-    if (snapshot.panelOpen) everOpened.current = true
-  }, [snapshot.panelOpen])
-  // 从未打开过 → 什么都不渲染；打开过一次后保持渲染，仅切换可见性。
-  if (!snapshot.panelOpen && !standalone && !everOpened.current) return null
-  const visible = snapshot.panelOpen || standalone
-  return renderSlot('database.console', {
-    onClose: () => controller.close(),
-    standalone,
-    hidden: !visible,
-  })
-}
 
 /* ----------------------------------------------------- plugin apply */
 
@@ -103,55 +66,28 @@ export function apply(ctx?: ClientCtx): void {
     )
   })
 
-  // 4) 工作台主面板 —— 自定义 `database.console`（single / scope: root）槽位。
-  //    任何插件都可以注入它来替换默认实现，或注册到子 slot `database.console.toolbar`
-  //    在工作台顶部添加按钮（子槽位声明见 children）。
-  const disposeConsole = slots.inject('database.console', () => {
+  // 4) 工作台主面板 —— 直接注册到 Conversation 的 View 槽位。
+  //    Conversation 会把它作为一个会话级 View（与 Chat/Trajectory 并列）渲染，
+  //    不再经过 shell.overlay，因此内容位于 conversation slot 的渲染树内。
+  const disposeConversation = slots.inject('conversation.view', () => {
     return slots.register(
       {
-        name: 'database.console',
-        id: 'dsh',
-        order: 0,
+        name: 'conversation.view',
+        id: 'database',
+        order: 60,
         locale: NS,
-        label: () => t('sidebar.aria'),
-        children: {
-          'database.console.toolbar': { kind: 'list', scope: 'root' },
-        },
+        label: () => t('sidebar.label'),
       },
       DatabaseConsoleOverlay as unknown as (p: Record<string, unknown>) => unknown,
     )
   })
 
-  // 5) shell.overlay 宿主 —— 把 `database.console` 嵌进 layout 已声明的浮层。
-  const disposeOverlay = slots.inject('shell.overlay', () => {
-    return slots.register(
-      {
-        name: 'shell.overlay',
-        id: 'database.console',
-        order: 60,
-        locale: NS,
-        label: () => t('sidebar.aria'),
-        // ⚠️ 必须声明 children —— DSH 渲染器**只**在 entry 有 children 时才把
-        // `renderSlot` prop 注入到 host 组件；没声明时 renderSlot 是 undefined，
-        // 调用 renderSlot('database.console', owner) 会抛 "t is not a function"。
-        // 这里把 `database.console` 声明成 shell.overlay 的子槽位，host 调用
-        // renderSlot('database.console', owner) 时渲染器会找到我们上面用
-        // disposeConsole 注册的 DatabaseConsoleOverlay，并把 owner 透传下去。
-        children: {
-          'database.console': { kind: 'single', scope: 'root' },
-        },
-      },
-      DatabaseShellOverlayHost as unknown as (p: Record<string, unknown>) => unknown,
-    )
-  })
-
-  // 6) 卸载级联
+  // 5) 卸载级联
   if (ctx?.effect) {
     ctx.effect(() => () => {
       disposeLocale()
       disposeSidebar()
-      disposeConsole()
-      disposeOverlay()
+      disposeConversation()
       disposeStyle()
     }, 'dsh-database-console: plugin teardown')
   }
@@ -164,6 +100,8 @@ function standalonePreview(): void {
   if (document.getElementById('dsh-database-standalone-button') !== null) return
   // 主题样式
   ensureThemeStyle()
+  // 持久工作台浮层（App 挂载一次，显隐由 controller 驱动，状态跨开关保留）
+  mountStandaloneConsole()
   // 浮动按钮
   const button = document.createElement('button')
   button.id = 'dsh-database-standalone-button'
