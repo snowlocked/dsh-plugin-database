@@ -9,6 +9,7 @@ import type { ConnectionStore } from './store.ts'
 
 // 供单测/冒烟直接调用（纯函数，无 IO）
 export { findConnectionByRef, connectionAliases } from './lookup.ts'
+export { buildSqlPaging } from './sqlutil.ts'
 
 export const name = 'dsh-database-console'
 /** 服务端需要等待注入的服务（webServer 最先，其余在 apply 内按需注入） */

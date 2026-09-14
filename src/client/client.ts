@@ -62,8 +62,10 @@ export interface QueryResult {
   affectedRows?: number
   durationMs: number
   truncated: boolean
-  /** 数据浏览：符合条件的总行数（未给时表示可能还有更多） */
+  /** 数据浏览：符合条件的总行数（未给时表示可能还有更多）；SQL 分页：COUNT 下推得到的总数 */
   total?: number
+  /** 服务端分页：当前页偏移；存在 = 该结果支持“上一页/下一页”服务端翻页 */
+  offset?: number
   kind: 'select' | 'change'
   message?: string
 }
@@ -71,7 +73,8 @@ export interface QueryResult {
 export interface TestResult { ok: boolean; latencyMs: number; message: string; detail?: string }
 export interface GenerateResult {
   sql: string
-  engine: 'custom' | 'harness'
+  /** 'history'：客户端从查询历史载入（非 AI 现场生成），仅前端展示用 */
+  engine: 'custom' | 'harness' | 'history'
   provider?: string
   model?: string
   note?: string
@@ -191,8 +194,17 @@ export const dbApi = {
       value: options.value,
       isNull: options.isNull,
     }),
-  query: (id: string, sql: string, readOnly: boolean, limit?: number, database?: string) =>
-    post<QueryResult>('/query', { id, sql, readOnly, ...(database ? { database } : {}), ...(limit ? { limit } : {}) }),
+  query: (id: string, sql: string, readOnly: boolean, limit?: number, database?: string, offset?: number) =>
+    post<QueryResult>('/query', {
+      id,
+      sql,
+      readOnly,
+      ...(database ? { database } : {}),
+      ...(limit ? { limit } : {}),
+      // 请求服务端统计总数 + 支持翻页（服务端仅在“只读单条 SELECT/WITH”时生效）
+      total: true,
+      ...(offset ? { offset } : {}),
+    }),
   aiModels: () => post<AiModelsResult>('/ai/models'),
   aiGenerate: (id: string, question: string, selection?: { provider?: string; model?: string }, database?: string) =>
     post<GenerateResult>('/ai/generate', { id, question, ...(database ? { database } : {}), ...(selection?.provider ? { provider: selection.provider } : {}), ...(selection?.model ? { model: selection.model } : {}) }),

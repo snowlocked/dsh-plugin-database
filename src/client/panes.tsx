@@ -8,6 +8,9 @@
  *
  * 子页懒加载（首次点开才创建），创建后保持挂载 —— 切换子页/切换外层 Tab/
  * 收起再打开数据库工作台都不丢各自的输入与结果状态。
+ *
+ * SQL 查询 / 自然语言查询共享「查询历史」（见 history.tsx）：每个连接保留
+ * 最近 50 条执行记录，点击条目载入到当前子页的输入框。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { dbApi, isSchemaAware, TYPE_LABELS } from './client.ts'
@@ -19,6 +22,8 @@ import type {
   GenerateResult,
   QueryResult,
 } from './client.ts'
+import { QueryHistorySection, useQueryHistory } from './history.tsx'
+import type { HistoryEntry } from './history.tsx'
 import type { BrowseTarget } from './target.ts'
 import { Banner, CellDetailEditor, errText, ResizableTableGrid, ResultTableView } from './ui.tsx'
 import type { BrowseSort } from './ui.tsx'
@@ -65,6 +70,13 @@ function BrowseView({ connection, target }: { connection: ConnectionView; target
   const [bFilters, setBFilters] = useState<Record<number, string>>({})
   const [bFilterOpen, setBFilterOpen] = useState<number | null>(null)
   const filterTimer = useRef<number | undefined>(undefined)
+  const gridWrapRef = useRef<HTMLDivElement>(null)
+
+  // 取数/翻页/过滤后表格体回到顶部（网格体自适应高度并内部滚动）
+  useEffect(() => {
+    const body = gridWrapRef.current?.querySelector(':scope > .db-gridx-body')
+    if (body) body.scrollTop = 0
+  }, [rows])
 
   // 子页挂载即取数（字段 + 首页数据）。目标对象固定，只在首次/身份变化时加载。
   useEffect(() => {
@@ -178,14 +190,14 @@ function BrowseView({ connection, target }: { connection: ConnectionView; target
         )}
       </div>
 
-      <div className="db-card" style={{ padding: 0 }}>
+      <div className="db-card db-card-fill" style={{ padding: 0 }}>
         <div className="db-card-title" style={{ padding: '8px 8px 0' }}>
           <span>🔍 数据预览</span>
           {rows
             ? <span className="db-muted">{rows.total !== undefined ? `共 ${rows.total} 行 · 本页 ${rows.rowCount}` : `${rows.rowCount} 行 · 偏移 ${offset}`}</span>
             : null}
         </div>
-        <div style={{ padding: '0 6px' }}>
+        <div style={{ padding: '0 6px', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Banner kind="error" text={error} />
           {cellMsg && <Banner kind={cellMsg.kind === 'ok' ? 'ok' : 'error'} text={cellMsg.text} />}
           {busy && <div className="db-muted" style={{ padding: '6px 0' }}>{busy}</div>}
@@ -196,8 +208,8 @@ function BrowseView({ connection, target }: { connection: ConnectionView; target
               <span className="db-muted" style={{ fontSize: 11 }}>排序/过滤由数据库执行，翻页继续生效</span>
             </div>
           ) : null}
-          <div style={{ display: 'flex', alignItems: 'stretch' }}>
-            <div className="db-gridx">
+          <div style={{ display: 'flex', alignItems: 'stretch', flex: '1 1 auto', minHeight: 0 }}>
+            <div className="db-gridx" ref={gridWrapRef}>
               {!rows
                 ? <div className="db-empty" style={{ padding: 14 }}>{busy || '加载中…'}</div>
                 : gridRows.length === 0
@@ -287,14 +299,22 @@ function SqlConsole({ connection, initialDatabase }: { connection: ConnectionVie
   // 取数上限：默认 200 行/页（快速返回；需要更多时调大后重新执行）
   const [pageLimit, setPageLimit] = useState(200)
   const { switchable, databases } = useSwitchableDatabases(connection)
+  // 查询历史：与自然语言查询页共享同一份（按连接区分，见 history.tsx）
+  const { entries: history, record: recordHistory, remove: removeHistory, clear: clearHistory } = useQueryHistory(connection.id)
+  // 最近一次成功执行的语句：翻页/改页大小时以它为准重跑（不受编辑框当前内容影响）
+  const [executedSql, setExecutedSql] = useState('')
 
-  const run = async (targetSql?: string): Promise<void> => {
+  const run = async (targetSql?: string, nextOffset = 0): Promise<void> => {
     const statement = (targetSql ?? sql).trim()
     if (!statement) { setError('请输入 SQL'); return }
     setRunning(true)
     setError('')
     try {
-      setResult(await dbApi.query(connection.id, statement, readOnly, pageLimit, database || undefined))
+      const result = await dbApi.query(connection.id, statement, readOnly, pageLimit, database || undefined, nextOffset)
+      setResult(result)
+      setExecutedSql(statement)
+      // 执行成功才入历史（失败的语句通常是笔误，修复后的版本会被记录）
+      recordHistory({ kind: 'sql', text: statement, database })
     } catch (reason) {
       setError(await errText(reason))
       setResult(null)
@@ -303,8 +323,19 @@ function SqlConsole({ connection, initialDatabase }: { connection: ConnectionVie
     }
   }
 
+  /** 服务端分页翻页：重跑最近执行的语句取指定偏移的页。 */
+  const gotoPage = (offset: number): void => {
+    void run(executedSql || sql, offset)
+  }
+
+  /** 载入历史：SQL 条目载入语句；NL 条目优先载入其生成 SQL（无则载入问题原文）。 */
+  const loadHistory = (entry: HistoryEntry): void => {
+    setSql(entry.kind === 'nl' ? (entry.sql ?? entry.text) : entry.text)
+    setDatabase(entry.database)
+  }
+
   return (
-    <div className="db-card">
+    <div className="db-card db-card-fill">
       <div className="db-card-title">
         <span>⌨️ SQL 查询{connection.type === 'mongodb' ? '' : `：${connection.name}`}</span>
         {switchable && (
@@ -318,6 +349,7 @@ function SqlConsole({ connection, initialDatabase }: { connection: ConnectionVie
         )}
         <span className="db-muted">{connection.type === 'mongodb' ? '提示：这里也接受 JSON 查询（带 collection 字段）' : '提示：多条语句仅在非只读时允许'}</span>
       </div>
+      <QueryHistorySection entries={history} onLoad={loadHistory} onDelete={removeHistory} onClear={clearHistory} />
       <textarea className="db-code" value={sql} onChange={(e) => setSql(e.target.value)}
         placeholder={connection.type === 'mongodb'
           ? '{"collection":"users","filter":{"age":{"$gt":18}},"limit":50}'
@@ -330,7 +362,16 @@ function SqlConsole({ connection, initialDatabase }: { connection: ConnectionVie
         <button className="db-btn-primary" onClick={() => run()} disabled={running}>{running ? '执行中…' : '执行 (Ctrl+Enter)'}</button>
       </div>
       <Banner kind="error" text={error} />
-      <ResultTableView result={result} limit={pageLimit} onLimitChange={setPageLimit} />
+      <ResultTableView
+        result={result}
+        limit={pageLimit}
+        onLimitChange={(next) => {
+          setPageLimit(next)
+          // 服务端分页时改页大小 → 立即按新页大小重取第 1 页（客户端分页模式仅本地切片）
+          if (result?.offset !== undefined && executedSql) void run(executedSql, 0)
+        }}
+        paging={{ onPage: gotoPage, busy: running }}
+      />
     </div>
   )
 }
@@ -352,6 +393,8 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
   // 目标数据库：默认跟随该表所在库
   const [database, setDatabase] = useState(initialDatabase ?? '')
   const { switchable, databases } = useSwitchableDatabases(connection)
+  // 查询历史：与 SQL 查询页共享同一份（按连接区分，见 history.tsx）
+  const { entries: history, record: recordHistory, remove: removeHistory, clear: clearHistory } = useQueryHistory(connection.id)
 
   const modelOptions = useMemo<Array<{ provider?: string; model?: string; label: string }>>(() => {
     type Entry = { provider?: string; model?: string; label: string }
@@ -398,6 +441,7 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
       setGenerated(result)
       setEditSql(result.sql)
       setAiResult(null)
+      recordHistory({ kind: 'nl', text: question, sql: result.sql, database })
     } catch (reason) {
       setError(await errText(reason))
     } finally {
@@ -414,6 +458,9 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
       setAiResult(result)
       setGenerated({ sql: result.sql, engine: result.engine, provider: result.provider, model: result.model, note: result.note })
       setEditSql(result.sql)
+      // 问题非空 = 一次自然语言查询；问题为空（直接执行 SQL 文本）则按 SQL 记录
+      if (question.trim()) recordHistory({ kind: 'nl', text: question, sql: result.sql, database })
+      else recordHistory({ kind: 'sql', text: result.sql, database })
     } catch (reason) {
       setError(await errText(reason))
     } finally {
@@ -421,8 +468,27 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
     }
   }
 
+  /** 载入历史：NL 条目恢复问题与生成 SQL；SQL 条目放进“生成的 SQL”编辑框。 */
+  const loadHistory = (entry: HistoryEntry): void => {
+    setDatabase(entry.database)
+    setAiResult(null)
+    if (entry.kind === 'nl') {
+      setQuestion(entry.text)
+      if (entry.sql) {
+        setGenerated({ sql: entry.sql, engine: 'history' })
+        setEditSql(entry.sql)
+      } else {
+        setGenerated(null)
+        setEditSql('')
+      }
+    } else {
+      setEditSql(entry.text)
+      setGenerated({ sql: entry.text, engine: 'history' })
+    }
+  }
+
   return (
-    <div className="db-card">
+    <div className="db-card db-card-fill">
       <div className="db-card-title">
         <span>💬 自然语言查询：{connection.name}</span>
         {switchable && (
@@ -449,6 +515,7 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
           : null}
         {models === null ? <span className="db-muted">（读取 DSH 模型列表中…）</span> : null}
       </div>
+      <QueryHistorySection entries={history} onLoad={loadHistory} onDelete={removeHistory} onClear={clearHistory} />
       <textarea className="db-code" style={{ minHeight: 90 }} value={question}
         onChange={(e) => setQuestion(e.target.value)}
         placeholder="例如：统计本月每个城市的下单用户数和订单总额，按城市排序" spellCheck={false} />
@@ -465,7 +532,7 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
           <div className="db-card-title">
             <span>🤖 生成的 SQL（可修改后执行）</span>
             <span className="db-muted">
-              {generated.engine === 'custom' ? '自定义端点' : 'DSH 模型'}
+              {generated.engine === 'custom' ? '自定义端点' : generated.engine === 'history' ? '历史载入' : 'DSH 模型'}
               {generated.provider ? ` · ${generated.provider}${generated.model ? `/${generated.model}` : ''}` : ''}
               {generated.note ? ` · ${generated.note}` : ''}
             </span>

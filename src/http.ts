@@ -4,7 +4,7 @@ import { isValidConnectionId } from './store.ts'
 import { DbConsoleError } from './errors.ts'
 import { dialectMeta, isSupportedType, testConnection, withSharedSession, invalidateSharedSessions } from './manager.ts'
 import { generateSql } from './ai.ts'
-import { normalizeSchema } from './sqlutil.ts'
+import { buildSqlPaging, normalizeSchema } from './sqlutil.ts'
 import type { AiSettings } from './ai.ts'
 
 /** webServer.register 的 handler 收到的 request（Node IncomingMessage 子集）。 */
@@ -371,7 +371,7 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     sendJson(response, 200, { ok: true, affectedRows })
   })
 
-  // 执行 SQL
+  // 执行 SQL（只读单条 SELECT/WITH 支持服务端分页：total 统计 + offset 翻页）
   add('POST', `${PREFIX}/query`, async (request, response) => {
     const body = toRecord(await readJsonBody(request))
     const id = requireId(body.id)
@@ -381,8 +381,39 @@ export function buildApiRoutes(deps: ApiDeps): HttpRoute[] {
     const params = Array.isArray(body.params) ? body.params : undefined
     const readOnly = body.readOnly !== false
     const limit = clampLimit(typeof body.limit === 'number' ? body.limit : 200, 1, hard)
-    const result = await withSharedSession(record, runtime, (session) =>
-      session.runQuery({ sql, params, readOnly, allowWrite: !readOnly, hardLimit: limit }))
+    const offset = Math.min(1_000_000, Math.max(0, Math.trunc(num(body.offset, 0)) || 0))
+    const wantTotal = body.total === true
+    // 分页/统计下推：仅对“只读”的单条 SELECT/WITH 生效；写语句、多条、SHOW/EXPLAIN 等走原路径
+    const paging = readOnly && (offset > 0 || wantTotal)
+      ? buildSqlPaging(
+          sql,
+          limit,
+          offset,
+          record.type === 'dameng' && record.dmCompat !== 'mysql' ? 'oracle' : 'limit',
+        )
+      : null
+    const result = await withSharedSession(record, runtime, async (session) => {
+      if (!paging) {
+        return session.runQuery({ sql, params, readOnly, allowWrite: !readOnly, hardLimit: limit })
+      }
+      // 共享会话可能不支持并发（达梦等）：先取当前页，再统计总数，串行执行
+      const fetchCap = paging.sliceOffset > 0 ? offset + limit : limit
+      const page = await session.runQuery({ sql: paging.pageSql, params, readOnly: true, allowWrite: false, hardLimit: fetchCap })
+      const rows = paging.sliceOffset > 0
+        ? page.rows.slice(paging.sliceOffset, paging.sliceOffset + limit)
+        : page.rows
+      const paged: QueryResult = { ...page, rows, rowCount: rows.length, truncated: false }
+      if (wantTotal) {
+        try {
+          const counted = await session.runQuery({ sql: paging.countSql, params, readOnly: true, allowWrite: false, hardLimit: 5 })
+          const value = counted.rows[0]?.[0]
+          const total = typeof value === 'number' ? value : Number(value)
+          if (Number.isFinite(total) && total >= 0) paged.total = total
+        } catch { /* 统计失败不阻断查询：total 缺省时前端按“还有下一页”探测 */ }
+      }
+      return paged
+    })
+    if (paging) result.offset = offset
     sendJson(response, 200, result)
   })
 

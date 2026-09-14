@@ -347,26 +347,45 @@ function compareCell(a: unknown, b: unknown): number {
 
 /**
  * SQL 控制台 / AI 查询的通用结果表：
- * 复用可拖列宽双表网格 + 表头点击排序 + 列过滤 + 分页/每页数量（数据全量在内存，分页在客户端）。
+ * 复用可拖列宽双表网格 + 表头点击排序 + 列过滤 + 分页/每页数量。
+ * 分页有两种模式：
+ *   - 服务端分页（传入 paging 且 result.offset 存在）：行数据是数据库按页取回的
+ *     当前页，总数来自 COUNT 下推；上一页/下一页通过 onPage 重新执行翻页；
+ *     排序/过滤仅作用于本页。
+ *   - 客户端分页（回退）：结果已全量取回（或 AI 结果），分页/排序/过滤都在内存。
  */
+export interface ResultPaging {
+  /** 服务端翻页：重新执行当前语句取指定偏移的页 */
+  onPage: (offset: number) => void
+  /** 执行/翻页进行中（禁用翻页按钮） */
+  busy?: boolean
+}
+
 export function ResultTableView({
   result,
   limit,
   onLimitChange,
+  paging,
 }: {
   result: QueryResult | null
-  /** 本次执行取回的行数上限（也是客户端每页切片大小） */
+  /** 本次执行取回的行数上限（也是每页切片大小） */
   limit: number
   onLimitChange: (next: number) => void
+  /** 传入后启用服务端分页：result.offset 存在时按 DB 总数翻页，否则回退客户端分页 */
+  paging?: ResultPaging
 }) {
   const [page, setPage] = useState(0)
   const pageSize = Math.max(1, limit)
   const [sort, setSort] = useState<BrowseSort | null>(null)
   const [filters, setFilters] = useState<Record<number, string>>({})
   const [filterOpen, setFilterOpen] = useState<number | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   const columns = result?.columns ?? []
   const rawRows = result?.rows ?? []
+  const serverPaged = paging !== undefined && result !== null && result.kind === 'select' && result.offset !== undefined
+  const serverOffset = serverPaged ? Math.max(0, result?.offset ?? 0) : 0
+  const serverTotal = serverPaged && typeof result?.total === 'number' ? result.total : null
 
   // 新结果到达时重置排序/过滤/分页
   useEffect(() => {
@@ -374,6 +393,9 @@ export function ResultTableView({
     setSort(null)
     setFilters({})
     setFilterOpen(null)
+    // 翻页/重新执行后表格体回到顶部（服务端分页换页时不停留在旧滚动位置）
+    const body = rootRef.current?.querySelector(':scope > .db-gridx-body')
+    if (body) body.scrollTop = 0
   }, [result])
 
   const filteredRows = useMemo(() => {
@@ -403,7 +425,15 @@ export function ResultTableView({
     setPage((previous) => Math.min(previous, pageCount - 1))
   }, [pageCount])
 
-  const pageRows = sortedRows.slice(page * pageSize, (page + 1) * pageSize)
+  // 服务端分页：rows 已是当前页；客户端分页：在内存里切片
+  const pageRows = serverPaged ? sortedRows : sortedRows.slice(page * pageSize, (page + 1) * pageSize)
+
+  // 服务端分页的页码与边界（total 未知时用“本页取满”探测是否还有下一页）
+  const serverPage = Math.floor(serverOffset / pageSize)
+  const serverPageCount = serverTotal !== null ? Math.max(1, Math.ceil(serverTotal / pageSize)) : null
+  const serverHasPrev = serverOffset > 0
+  const serverHasNext = serverTotal !== null ? serverOffset + pageSize < serverTotal : pageRows.length >= pageSize
+  const hasPageFilters = Object.values(filters).some((value) => value.trim() !== '')
 
   if (!result || result.columns.length === 0) {
     return (
@@ -430,7 +460,7 @@ export function ResultTableView({
   }
 
   return (
-    <div>
+    <div className="db-result" ref={rootRef}>
       <ResultFooter result={result} />
       <ResizableTableGrid
         columns={columns}
@@ -452,15 +482,30 @@ export function ResultTableView({
         <div className="db-empty">（没有匹配的行）</div>
       ) : null}
       <div className="db-row" style={{ marginTop: 6, gap: 8 }}>
-        <button disabled={page <= 0} onClick={() => setPage((previous) => Math.max(0, previous - 1))}>← 上一页</button>
-        <button disabled={page >= pageCount - 1} onClick={() => setPage((previous) => Math.min(pageCount - 1, previous + 1))}>下一页 →</button>
-        <span className="db-muted">
-          第 {page + 1}/{pageCount} 页 · 共 {matched} 行{matched !== total ? `（已取回 ${total} 行）` : ''}
-        </span>
+        {serverPaged && paging ? (
+          <>
+            <button disabled={!serverHasPrev || paging.busy === true}
+              onClick={() => paging.onPage(Math.max(0, serverOffset - pageSize))}>← 上一页</button>
+            <button disabled={!serverHasNext || paging.busy === true}
+              onClick={() => paging.onPage(serverOffset + pageSize)}>下一页 →</button>
+            <span className="db-muted">
+              第 {serverPage + 1}{serverPageCount !== null ? `/${serverPageCount}` : ''} 页 · {serverTotal !== null ? `共 ${serverTotal} 行` : `本页 ${pageRows.length} 行`}
+              {hasPageFilters ? ` · 本页过滤后 ${sortedRows.length} 行` : ''}
+            </span>
+          </>
+        ) : (
+          <>
+            <button disabled={page <= 0} onClick={() => setPage((previous) => Math.max(0, previous - 1))}>← 上一页</button>
+            <button disabled={page >= pageCount - 1} onClick={() => setPage((previous) => Math.min(pageCount - 1, previous + 1))}>下一页 →</button>
+            <span className="db-muted">
+              第 {page + 1}/{pageCount} 页 · 共 {matched} 行{matched !== total ? `（已取回 ${total} 行）` : ''}
+            </span>
+          </>
+        )}
         <span className="db-muted">每页/最多取</span>
         <select
           value={pageSize}
-          title="每页行数 = 本次执行最多取回的行数；调大后请重新执行以取更多数据"
+          title={serverPaged ? '每页行数；服务端分页时修改后自动重新执行' : '每页行数 = 本次执行最多取回的行数；调大后请重新执行以取更多数据'}
           onChange={(e) => { onLimitChange(Number(e.target.value)); setPage(0) }}
         >
           {[200, 500, 1000, 5000].map((n) => <option key={n} value={n}>{n}</option>)}

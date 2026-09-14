@@ -398,6 +398,10 @@
   /* 左右内边距为 0：让 ws-head / 卡片的横向分割线通到左导航分割线与右边缘；
      文字与表格的留白由各内容块自己的 padding 提供。 */
   padding: 8px 0 20px;
+  /* 纵向 flex：让「查询结果表格」自适应剩余高度（表格体内部滚动），
+     正常情况下页面本身不再出现第二条竖向滚动条；空间不足时整体滚动兜底 */
+  display: flex;
+  flex-direction: column;
   scrollbar-width: thin;
   scrollbar-color: var(--db-border-strong) transparent;
 }
@@ -406,6 +410,8 @@
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 /* 纵向堆叠的卡片之间用 hairline 分割线代替卡片描边（线上下留呼吸空间） */
 #dsh-database-console .db-pane-stack > .db-card + .db-card {
@@ -419,6 +425,7 @@
   gap: 8px;
   flex-wrap: wrap;
   min-width: 0;
+  flex: 0 0 auto;
   padding: 2px 8px 10px;
   border-bottom: 1px solid var(--db-border);
 }
@@ -441,6 +448,35 @@
   gap: 8px;
   min-width: 0;
   min-height: 0;
+  flex: 1 1 auto;
+}
+/* 子页容器：纵向 flex，让子页内容（结果表格）自适应剩余高度。
+   未激活的子页由内联 display:none 隐藏（优先级高于这里的 display:flex）。 */
+#dsh-database-console .db-ws-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 填充型卡片（SQL 查询 / 自然语言查询 / 数据浏览预览卡）：
+   自身撑满子页剩余高度，结果表格在其内部继续向下填充 */
+#dsh-database-console .db-card-fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* 查询结果区（ResultTableView）：分页条固定底部，表格体吃掉全部剩余高度 */
+#dsh-database-console .db-result {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#dsh-database-console .db-result > .db-gridx-body {
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: none;
 }
 
 /* ------------------------------------------------------------------ 通用小件 */
@@ -716,6 +752,103 @@
   font-weight: 600;
 }
 
+/* ------------------------------------------------------------------ 查询历史 */
+/* 可折叠面板：一行开关 + 滚动列表；点击条目载入，× 删除单条 */
+#dsh-database-console .db-history {
+  margin: 0 0 8px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+#dsh-database-console .db-history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--db-ease);
+}
+#dsh-database-console .db-history-toggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-panel-2));
+}
+#dsh-database-console .db-history-list {
+  margin-top: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong) transparent;
+  border: 1px solid color-mix(in srgb, var(--db-border) 55%, transparent);
+  border-radius: 8px;
+  padding: 3px;
+  background: color-mix(in srgb, var(--db-panel) 55%, transparent);
+}
+#dsh-database-console .db-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 0;
+  transition: background var(--db-ease);
+}
+#dsh-database-console .db-history-item:hover,
+#dsh-database-console .db-history-item:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover, var(--db-accent-weak));
+  outline: none;
+}
+#dsh-database-console .db-history-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--db-mono);
+  font-size: 11.5px;
+}
+#dsh-database-console .db-history-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--db-faint);
+}
+#dsh-database-console .db-history-del {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--db-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  opacity: 0.6;
+}
+#dsh-database-console .db-history-del:hover {
+  opacity: 1;
+  color: var(--db-err);
+  background: color-mix(in srgb, var(--db-err) 14%, transparent);
+}
+#dsh-database-console .db-history-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px 1px;
+  font-size: 11px;
+  color: var(--db-faint);
+}
+#dsh-database-console .db-history-foot button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
 /* ===== DSH shell 集成：侧边栏入口 ===== */
 /* （旧属性开关时代的中栏接管规则已删除：[data-dsh-database-view] 一类属性
    presence 选择器会误伤宿主节点 —— 0.4.5 白屏事故根因；新方案由
@@ -811,10 +944,22 @@ button.db-sidebar-entry svg {
 #dsh-database-console .db-gridx {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+  /* 纵向 flex：表头固定、表体吃掉剩余高度（数据浏览的预览网格同样自适应） */
+  display: flex;
+  flex-direction: column;
   border: 0;
   border-radius: 0;
 }
+#dsh-database-console .db-gridx > .db-gridx-body {
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: none;
+}
 #dsh-database-console .db-gridx-head {
+  /* flex 子项禁止收缩：overflow:hidden 的子项自动最小尺寸为 0，
+     空间紧张时表头会被整个压没（SQL 结果表“没有表头”的根因） */
+  flex: 0 0 auto;
   overflow: hidden;
   background: var(--db-bg);
   border-bottom: 1px solid var(--db-border-strong);
@@ -966,7 +1111,7 @@ button.db-sidebar-entry svg {
   border-left: 1px solid var(--db-border);
   background: var(--db-panel);
   overflow: auto;
-  max-height: 560px;
+  max-height: none;
   scrollbar-width: thin;
   scrollbar-color: var(--db-border-strong) transparent;
 }
@@ -1015,10 +1160,9 @@ button.db-sidebar-entry svg {
   background: var(--db-bg);
 }
 
-/* 窄屏时给数据浏览网格更高的可视区（Tab 内滚动时保留页脚） */
-#dsh-database-console .db-gridx-body {
-  max-height: 62vh;
-}
+/* 网格体高度策略已改为 flex 自适应剩余高度：
+   .db-result > .db-gridx-body（SQL/NL 结果）与 .db-gridx > .db-gridx-body（数据浏览）
+   均为 flex:1 + max-height:none，旧的 62vh 上限规则已删除。 */
 
 /* ===== 自适应页面宽度 =====
  * 面板宽度 = DSH 中栏宽度（由 db-console-overlay.tsx 跟踪两列得出），不等于视口

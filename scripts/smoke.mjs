@@ -1,5 +1,5 @@
 // 服务端冒烟：不依赖 cordis，直接模拟 ctx 调用插件 apply，再用内存 fake 路由 handler 驱动 HTTP 层。
-import { apply, findConnectionByRef, connectionAliases } from '../dist/dsh-database-console.js'
+import { apply, findConnectionByRef, connectionAliases, buildSqlPaging } from '../dist/dsh-database-console.js'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -140,6 +140,17 @@ let connId = ''
   const r = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'select id,name,city from users where city=? order by id', params: ['北京'], readOnly: true })
   check('参数化查询 ok', r.json.rowCount === 1 && r.json.rows[0][1] === '张三', JSON.stringify(r))
 }
+// 4b) SQL 服务端分页：total 统计 + offset 翻页（含“原语句自带 LIMIT 走包装”的路径）
+{
+  const first = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'select id,name from users order by id', readOnly: true, limit: 1, total: true })
+  check('SQL 分页：首页统计总数', first.json.rowCount === 1 && first.json.total === 2 && first.json.offset === 0, JSON.stringify(first))
+  const second = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'select id,name from users order by id', readOnly: true, limit: 1, offset: 1, total: true })
+  check('SQL 分页：offset=1 取第 2 行', second.json.rowCount === 1 && second.json.rows[0][0] === 2 && second.json.total === 2 && second.json.offset === 1, JSON.stringify(second))
+  const wrapped = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'select id,name from users order by id limit 2', readOnly: true, limit: 1, offset: 1, total: true })
+  check('SQL 分页：自带 LIMIT 包装后翻页', wrapped.json.rowCount === 1 && wrapped.json.rows[0][0] === 2 && wrapped.json.total === 2, JSON.stringify(wrapped))
+  const write = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'select id from users', readOnly: false, limit: 1, total: true })
+  check('非只读不分页', write.json.offset === undefined && write.json.total === undefined, JSON.stringify(write))
+}
 {
   const r = await callSync('POST', '/api/dsh-database-console/query', { id: connId, sql: 'delete from users where id=1', readOnly: true })
   check('只读拦截 delete', r.status === 400 && /只读/.test(r.json.error))
@@ -209,6 +220,27 @@ let connId = ''
   check('名称精确「36」优先于主机段匹配', nameWins.found?.record.id === 'db_tmp')
   const aliases = connectionAliases(records[0])
   check('48.36 别名含 36/48.36', aliases[0] === '48.36' && aliases.includes('36'))
+}
+
+// 9) SQL 分页计划（buildSqlPaging 纯函数：limit / oracle 两种语法风格）
+{
+  const p1 = buildSqlPaging('select * from users where id > 1 -- 注释\n', 200, 0, 'limit')
+  check('计划: 无分页语句追加 limit', p1 !== null && p1.pageSql.endsWith('limit 200') && p1.sliceOffset === 0 && p1.countSql.startsWith('select count(*) from ('), JSON.stringify(p1))
+  const p2 = buildSqlPaging('select * from users order by id', 3, 6, 'limit')
+  check('计划: 追加 limit+offset', p2?.pageSql.endsWith('limit 3 offset 6') === true, JSON.stringify(p2))
+  const p3 = buildSqlPaging('select * from users limit 100', 3, 3, 'limit')
+  check('计划: 自带 LIMIT 走包装', p3?.pageSql === 'select * from (select * from users limit 100) dsh_pg limit 3 offset 3', JSON.stringify(p3))
+  const p4 = buildSqlPaging('select * from users order by id', 2, 4, 'oracle')
+  check('计划: oracle rownum + 切片偏移', p4?.pageSql === 'select * from (select * from users order by id) where rownum <= 6' && p4?.sliceOffset === 4, JSON.stringify(p4))
+  const p5 = buildSqlPaging('with t as (select 1 x) select * from t', 10, 0, 'limit')
+  check('计划: CTE 可包装', p5?.pageSql.endsWith('limit 10') === true, JSON.stringify(p5))
+  const n1 = buildSqlPaging('show tables', 10, 0, 'limit')
+  const n2 = buildSqlPaging('select 1; select 2', 10, 0, 'limit')
+  const n3 = buildSqlPaging('update users set age=1', 10, 0, 'limit')
+  const n4 = buildSqlPaging('explain select 1', 10, 0, 'limit')
+  check('计划: show/多条/update/explain 不分页', n1 === null && n2 === null && n3 === null && n4 === null, JSON.stringify([n1, n2, n3, n4]))
+  const p6 = buildSqlPaging('select * from t offset 5', 3, 0, 'limit')
+  check('计划: 自带 OFFSET 也走包装', p6?.pageSql.startsWith('select * from (select * from t offset 5) dsh_pg') === true, JSON.stringify(p6))
 }
 
 console.log(failures === 0 ? '\nSMOKE PASS' : `\nSMOKE FAIL (${failures})`)

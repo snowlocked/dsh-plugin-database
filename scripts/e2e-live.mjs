@@ -214,6 +214,27 @@ try {
         check('PG test2.public 表列表 200', tb.status === 200 && Array.isArray(tb.json?.tables), JSON.stringify(tb.json ?? tb.status))
         const rt = await api('POST', `${PREFIX}/query`, { id: pgConn.id, database: 'test2', sql: 'select current_database() as db', readOnly: true })
         check('PG test2 库上执行 SQL', rt.status === 200 && rt.json?.rows?.[0]?.[0] === 'test2', `status=${rt.status} json=${JSON.stringify(rt.json ?? null)}`)
+        // SQL 服务端分页：total 统计 + offset 翻页（真实 PG）
+        const pgPage = await api('POST', `${PREFIX}/query`, {
+          id: pgConn.id, database: 'test2', readOnly: true, limit: 3, offset: 3, total: true,
+          sql: 'select n from generate_series(1, 10) as n',
+        })
+        check('PG SQL 分页 offset=3/total=10',
+          pgPage.status === 200 && pgPage.json?.rows?.[0]?.[0] === 4 && pgPage.json?.total === 10 && pgPage.json?.offset === 3,
+          `status=${pgPage.status} json=${JSON.stringify(pgPage.json ?? null)}`)
+        // 达梦（oracle 兼容走 rownum Top-N；mysql 兼容走 LIMIT/OFFSET）：真实 DM 链路
+        const dmConn = list.find((c) => c.type === 'dameng' && c.host === '192.168.48.9')
+        if (dmConn) {
+          const dmPage = await api('POST', `${PREFIX}/query`, {
+            id: dmConn.id, readOnly: true, limit: 2, offset: 1, total: true,
+            sql: 'select 1 as n from dual union all select 2 from dual union all select 3 from dual order by n',
+          })
+          check('达梦 SQL 分页 offset=1/total=3',
+            dmPage.status === 200 && dmPage.json?.rows?.[0]?.[0] === 2 && dmPage.json?.total === 3 && dmPage.json?.offset === 1,
+            `status=${dmPage.status} json=${JSON.stringify(dmPage.json ?? null)}`)
+        } else {
+          console.log('   （跳过）未找到 48.9 的达梦连接')
+        }
       } else {
         console.log('   （跳过）未找到 48.36 的 PG 连接')
       }

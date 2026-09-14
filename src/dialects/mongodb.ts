@@ -134,24 +134,38 @@ export function createMongodbSession(record: ConnectionRecord): DialectSession {
       }
       const started = Date.now()
       let docs: Doc[] = []
-      let findOne = false
+      const findOne = (envelope as MongoEnvelope).findOne === true
+      // SQL 控制台分页：offset = 页偏移（叠加在用户自带 skip 之上）；wantTotal 时用 countDocuments 统计
+      const pageOffset = Math.max(0, Math.trunc(options.offset ?? 0) || 0)
+      const paged = !findOne && (pageOffset > 0 || options.wantTotal === true)
+      let total: number | undefined
       try {
-        const { filter, sort, projection, skip, limit, findOne: one } = envelope as MongoEnvelope
+        const { filter, sort, projection, skip, limit } = envelope as MongoEnvelope
         const filterDoc = (filter ?? {}) as Document
         const sortDoc = (sort ?? {}) as Document
         const projectionDoc = (projection ?? {}) as Document
-        findOne = one === true
+        const baseSkip = typeof skip === 'number' && skip > 0 ? Math.trunc(skip) : 0
         const cursor = collection.find(filterDoc)
         if (sort && typeof sort === 'object') cursor.sort(sortDoc)
         if (projection && typeof projection === 'object') cursor.project(projectionDoc)
-        if (typeof skip === 'number' && skip > 0) cursor.skip(Math.trunc(skip))
-        const max = clampInt(typeof limit === 'number' ? limit : 100, 1, 10_000)
+        cursor.skip(baseSkip + (findOne ? 0 : pageOffset))
+        // 分页时页大小 = 请求的 limit（与前端分页步长一致），覆盖 JSON 里可能写的 limit
+        const max = paged
+          ? clampInt(options.hardLimit, 1, 10_000)
+          : clampInt(typeof limit === 'number' ? limit : 100, 1, 10_000)
         cursor.limit(max)
         docs = findOne ? (await cursor.toArray()).slice(0, 1) : await cursor.toArray()
+        if (paged && options.wantTotal === true) {
+          try { total = await collection.countDocuments(filterDoc) } catch { /* 统计失败不阻断查询 */ }
+        }
       } catch (reason) {
         throw wrapError(reason, 'MongoDB 查询失败（请检查 JSON 过滤器语法）', 'MONGO_QUERY', 502)
       }
       const result = docsResult(docs, Date.now() - started)
+      if (paged) {
+        result.offset = pageOffset
+        if (total !== undefined) result.total = total
+      }
       return {
         ...result,
         message: findOne ? 'findOne 结果' : `find 结果（${result.rowCount} 条）`,

@@ -141,6 +141,54 @@ export function capReadSelect(sql: string, cap: number): { sql: string; capped: 
   return { sql: `${clean}\nlimit ${safeCap}`, capped: true }
 }
 
+/** SQL 服务端分页执行计划（buildSqlPaging 的返回值）。 */
+export interface SqlPagingPlan {
+  /** 统计总行数（单条只读 SELECT 的 COUNT 包装） */
+  countSql: string
+  /** 取当前页数据 */
+  pageSql: string
+  /** > 0 时：pageSql 取回的是前 offset+limit 行（oracle rownum 风格），执行后需 slice(sliceOffset, sliceOffset+limit) */
+  sliceOffset: number
+}
+
+/**
+ * 为“单条、只读的 SELECT/WITH 语句”构造服务端分页计划：总数统计 + 当前页取数。
+ * 返回 null 表示无法安全分页（多语句、非 SELECT/WITH 等），调用方回退为整语句执行（旧行为）。
+ *
+ * - style='limit'：LIMIT/OFFSET 语法（PostgreSQL / MySQL / SQLite / 达梦 mysql 兼容）
+ *   · 原语句未自带分页 → 直接追加 `limit N offset M`（完整保留原 ORDER BY 语义）
+ *   · 原语句自带分页 → 包一层派生表再分页（内层带 LIMIT 时 ORDER BY 语义仍有效）
+ * - style='oracle'：rownum 语法（达梦 oracle 兼容）→ 只取前 offset+limit 行，由调用方切片
+ *   （`select * from (原语句) where rownum <= N` 是标准 Top-N 写法，内层 ORDER BY 会被保留）
+ *
+ * 与 capReadSelect 一致的保守规则：语句任意位置出现 limit/offset/fetch 关键字
+ * （含字符串/列名，误判只会退化为包装执行，不影响正确性）即认为已自带分页。
+ */
+export function buildSqlPaging(sql: string, limit: number, offset: number, style: 'limit' | 'oracle'): SqlPagingPlan | null {
+  const statements = splitStatements(sql)
+  if (statements.length !== 1) return null
+  const trimmed = (statements[0] ?? '').trim()
+  if (!/^(select|with)\b/iu.test(trimmed)) return null
+  // 剥掉尾部注释，避免追加/包装的语法被注释掉
+  const clean = trimmed.replace(/--[^\n]*$/u, '').replace(/\/\*[\s\S]*\*\/\s*$/u, '').replace(/\s+$/u, '')
+  if (!clean) return null
+  const safeLimit = Math.max(1, Math.trunc(limit) || 1)
+  const safeOffset = Math.max(0, Math.trunc(offset) || 0)
+  const countSql = `select count(*) from (${clean}) dsh_cnt`
+  if (style === 'oracle') {
+    return {
+      countSql,
+      pageSql: `select * from (${clean}) where rownum <= ${safeOffset + safeLimit}`,
+      sliceOffset: safeOffset,
+    }
+  }
+  const tail = `limit ${safeLimit}${safeOffset > 0 ? ` offset ${safeOffset}` : ''}`
+  const pageSql = /\blimit\b|\boffset\b|\bfetch\b/iu.test(clean)
+    ? `select * from (${clean}) dsh_pg ${tail}`
+    : `${clean} ${tail}`
+  return { countSql, pageSql, sliceOffset: 0 }
+}
+
 /** LIKE 通配符转义（配合 SQL 侧 `escape '\'`），让用户输入按字面匹配。 */
 export function escapeLike(value: string): string {
   return value.replace(/[\%_]/g, '\$&')

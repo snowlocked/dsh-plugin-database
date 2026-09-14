@@ -98,8 +98,10 @@ export interface QueryResult {
   durationMs: number
   /** 是否因上限截断 */
   truncated: boolean
-  /** 数据浏览：符合条件的总行数（仅当 <= 请求行数时可精确给出；未给时表示“可能还有更多”） */
+  /** 符合条件的总行数：数据浏览（<=请求行数时可精确给出）与 SQL 分页（COUNT 下推成功时） */
   total?: number
+  /** 服务端分页（/query）：当前页偏移；存在即表示该结果支持服务端翻页（上一页/下一页） */
+  offset?: number
   kind: QueryKind
   /** 说明文字（例如 MongoDB 过滤器、无返回语句） */
   message?: string
@@ -115,6 +117,10 @@ export interface RunQueryOptions {
   hardLimit: number
   /** 是否允许 DML/DDL（readOnly=true 时强制为不允许） */
   allowWrite: boolean
+  /** SQL 分页：当前页偏移（与 wantTotal 一起由 /query 路由下发给方言实现） */
+  offset?: number
+  /** SQL 分页：是否统计总行数 */
+  wantTotal?: boolean
 }
 
 /** 单元格编辑：把某行某列更新为新值（用主键/定位条件 WHERE）。 */
