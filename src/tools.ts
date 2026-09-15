@@ -171,8 +171,12 @@ export async function registerDatabaseTools(
       return { connections: connectionChoicesText(deps.store) }
     },
     finalizeContent(_exec: unknown, result: { content?: unknown }) {
-      if (typeof result.content === 'string' && result.content.length > 0) {
-        return [{ type: 'text', text: result.content }]
+      if (typeof result.content === 'string') {
+        // 空字符串也必须归一化为文本块：裸字符串（含 ""）留在 content 上，宿主
+        // contentHasImage 递归遍历 tool-result 块时会对它调 .some，抛
+        // "content.some is not a function" 直接炸掉整个模型回合（k8s 插件已踩过）。
+        const text = result.content.length > 0 ? result.content : '（工具执行成功，无输出）'
+        return [{ type: 'text', text }]
       }
       return undefined
     },
@@ -223,8 +227,12 @@ export async function registerDatabaseTools(
       return { ok: true, supported: true, databases: text, ...(note ? { note } : {}) }
     },
     finalizeContent(_exec: unknown, result: { content?: unknown }) {
-      if (typeof result.content === 'string' && result.content.length > 0) {
-        return [{ type: 'text', text: result.content }]
+      if (typeof result.content === 'string') {
+        // 空字符串也必须归一化为文本块：裸字符串（含 ""）留在 content 上，宿主
+        // contentHasImage 递归遍历 tool-result 块时会对它调 .some，抛
+        // "content.some is not a function" 直接炸掉整个模型回合（k8s 插件已踩过）。
+        const text = result.content.length > 0 ? result.content : '（工具执行成功，无输出）'
+        return [{ type: 'text', text }]
       }
       return undefined
     },
@@ -271,8 +279,12 @@ export async function registerDatabaseTools(
       return { ok: true, tables: `连接「${record.name}」${schema ? `schema ${schema}` : ''}下共 ${tables.length} 个对象：\n${text}`, ...(note ? { note } : {}) }
     },
     finalizeContent(_exec: unknown, result: { content?: unknown }) {
-      if (typeof result.content === 'string' && result.content.length > 0) {
-        return [{ type: 'text', text: result.content }]
+      if (typeof result.content === 'string') {
+        // 空字符串也必须归一化为文本块：裸字符串（含 ""）留在 content 上，宿主
+        // contentHasImage 递归遍历 tool-result 块时会对它调 .some，抛
+        // "content.some is not a function" 直接炸掉整个模型回合（k8s 插件已踩过）。
+        const text = result.content.length > 0 ? result.content : '（工具执行成功，无输出）'
+        return [{ type: 'text', text }]
       }
       return undefined
     },
@@ -330,8 +342,12 @@ export async function registerDatabaseTools(
       return { ok: true, schema: `表「${table}」字段（${columns.length}）：\n${text}`, ...(note ? { note } : {}) }
     },
     finalizeContent(_exec: unknown, result: { content?: unknown }) {
-      if (typeof result.content === 'string' && result.content.length > 0) {
-        return [{ type: 'text', text: result.content }]
+      if (typeof result.content === 'string') {
+        // 空字符串也必须归一化为文本块：裸字符串（含 ""）留在 content 上，宿主
+        // contentHasImage 递归遍历 tool-result 块时会对它调 .some，抛
+        // "content.some is not a function" 直接炸掉整个模型回合（k8s 插件已踩过）。
+        const text = result.content.length > 0 ? result.content : '（工具执行成功，无输出）'
+        return [{ type: 'text', text }]
       }
       return undefined
     },
@@ -391,8 +407,12 @@ export async function registerDatabaseTools(
       return { ok: true, text: resultToText(result, 100), rows: result.rowCount, ...(note ? { note } : {}) }
     },
     finalizeContent(_exec: unknown, result: { content?: unknown }) {
-      if (typeof result.content === 'string' && result.content.length > 0) {
-        return [{ type: 'text', text: result.content }]
+      if (typeof result.content === 'string') {
+        // 空字符串也必须归一化为文本块：裸字符串（含 ""）留在 content 上，宿主
+        // contentHasImage 递归遍历 tool-result 块时会对它调 .some，抛
+        // "content.some is not a function" 直接炸掉整个模型回合（k8s 插件已踩过）。
+        const text = result.content.length > 0 ? result.content : '（工具执行成功，无输出）'
+        return [{ type: 'text', text }]
       }
       return undefined
     },
