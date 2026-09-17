@@ -449,18 +449,43 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
     }
   }
 
+  // “生成并直接查询”保留原逻辑：调用 AI 生成并查询接口。
   const runGenerated = async (): Promise<void> => {
-    if (!editSql.trim() && !question.trim()) { setError('没有可执行的 SQL，请先生成或填写'); return }
+    if (!question.trim()) { setError('请输入要查询的问题'); return }
     setBusy('执行查询中…')
     setError('')
     try {
-      const result = await dbApi.aiRun(connection.id, question || editSql, selection(), pageLimit, database || undefined)
+      const result = await dbApi.aiRun(connection.id, question, selection(), pageLimit, database || undefined)
       setAiResult(result)
       setGenerated({ sql: result.sql, engine: result.engine, provider: result.provider, model: result.model, note: result.note })
       setEditSql(result.sql)
-      // 问题非空 = 一次自然语言查询；问题为空（直接执行 SQL 文本）则按 SQL 记录
-      if (question.trim()) recordHistory({ kind: 'nl', text: question, sql: result.sql, database })
-      else recordHistory({ kind: 'sql', text: result.sql, database })
+      recordHistory({ kind: 'nl', text: question, sql: result.sql, database })
+    } catch (reason) {
+      setError(await errText(reason))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  // “执行此 SQL”只调用 SQL 查询接口，不再经过生成并查询接口。
+  const executeSql = async (): Promise<void> => {
+    const statement = editSql.trim()
+    if (!statement) { setError('没有可执行的 SQL，请先生成或填写'); return }
+    setBusy('执行查询中…')
+    setError('')
+    try {
+      const queryResult = await dbApi.query(connection.id, statement, true, pageLimit, database || undefined)
+      const result: AiRunResult = {
+        sql: statement,
+        engine: generated?.engine ?? 'history',
+        ...(generated?.provider ? { provider: generated.provider } : {}),
+        ...(generated?.model ? { model: generated.model } : {}),
+        ...(generated?.note ? { note: generated.note } : {}),
+        result: queryResult,
+      }
+      setAiResult(result)
+      if (question.trim()) recordHistory({ kind: 'nl', text: question, sql: statement, database })
+      else recordHistory({ kind: 'sql', text: statement, database })
     } catch (reason) {
       setError(await errText(reason))
     } finally {
@@ -539,7 +564,7 @@ function AiQuery({ connection, initialDatabase }: { connection: ConnectionView; 
           </div>
           <textarea className="db-code" value={editSql} onChange={(e) => setEditSql(e.target.value)} spellCheck={false} style={{ minHeight: 110 }} />
           <div className="db-row" style={{ marginTop: 8 }}>
-            <button className="db-btn-primary" onClick={runGenerated} disabled={busy !== ''}>执行此 SQL（只读）</button>
+            <button className="db-btn-primary" onClick={executeSql} disabled={busy !== ''}>执行此 SQL（只读）</button>
           </div>
         </div>
       )}
