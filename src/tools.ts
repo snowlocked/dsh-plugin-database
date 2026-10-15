@@ -164,7 +164,11 @@ export async function registerDatabaseTools(
         },
       },
       render(_args: unknown, value: { connections?: string }) {
-        return value.connections ?? '（空）'
+        // 契约要求 render 直接返回 ContentBlock[]：tools/post-execute 阶段（如
+        // dsh-spill-policy 的 content.some 扫描）在 finalizeContent 之前消费
+        // result.content，返回裸字符串会抛 "content.some is not a function"
+        // （与 k8s 插件、内置 bash 工具一致）。
+        return [{ type: 'text' as const, text: value.connections ?? '（空）' }]
       },
     },
     async execute() {
@@ -205,7 +209,8 @@ export async function registerDatabaseTools(
         },
       },
       render(_args: unknown, value: { ok?: boolean; databases?: string; note?: string; error?: string }) {
-        return value.ok ? (value.databases ?? '') : `不支持/失败：${value.error ?? value.note ?? '未知'}`
+        const text = value.ok ? (value.databases ?? '') : `不支持/失败：${value.error ?? value.note ?? '未知'}`
+        return [{ type: 'text' as const, text }]
       },
     },
     async execute(args: { connection?: string }) {
@@ -262,8 +267,10 @@ export async function registerDatabaseTools(
         },
       },
       render(_args: unknown, value: { ok?: boolean; tables?: string; note?: string; error?: string }) {
-        if (!value.ok) return `错误：${value.error ?? '未知'}`
-        return value.note ? `${value.tables ?? ''}\n注：${value.note}` : (value.tables ?? '')
+        const text = value.ok
+          ? (value.note ? `${value.tables ?? ''}\n注：${value.note}` : (value.tables ?? ''))
+          : `错误：${value.error ?? '未知'}`
+        return [{ type: 'text' as const, text }]
       },
     },
     async execute(args: { connection?: string; database?: string; schema?: string }) {
@@ -314,8 +321,10 @@ export async function registerDatabaseTools(
         },
       },
       render(_args: unknown, value: { ok?: boolean; schema?: string; note?: string; error?: string }) {
-        if (!value.ok) return `错误：${value.error ?? '未知'}`
-        return value.note ? `${value.schema ?? ''}\n注：${value.note}` : (value.schema ?? '')
+        const text = value.ok
+          ? (value.note ? `${value.schema ?? ''}\n注：${value.note}` : (value.schema ?? ''))
+          : `错误：${value.error ?? '未知'}`
+        return [{ type: 'text' as const, text }]
       },
     },
     async execute(args: { connection?: string; table?: string; database?: string; schema?: string }) {
@@ -383,9 +392,11 @@ export async function registerDatabaseTools(
         },
       },
       render(_args: unknown, value: { ok?: boolean; text?: string; rows?: number; note?: string; error?: string }) {
-        if (!value.ok) return `查询失败：${value.error ?? '未知'}`
         const note = value.note ? `\n注：${value.note}` : ''
-        return `查询成功（${value.rows ?? 0} 行）：\n${value.text ?? ''}${note}`
+        const text = value.ok
+          ? `查询成功（${value.rows ?? 0} 行）：\n${value.text ?? ''}${note}`
+          : `查询失败：${value.error ?? '未知'}`
+        return [{ type: 'text' as const, text }]
       },
     },
     async execute(args: { connection?: string; database?: string; sql?: string; limit?: number }) {
